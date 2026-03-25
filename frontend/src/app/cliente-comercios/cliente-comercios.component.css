@@ -1,0 +1,215 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+}
+
+.global-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(160deg, #f6efe4, #edf7f2);
+}
+
+.global-card {
+  width: min(100%, 32rem);
+  padding: 1.5rem;
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(18, 38, 63, 0.12);
+}
+
+.eyebrow {
+  display: inline-block;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f766e;
+  background: #d5f5ef;
+}
+
+h1 {
+  margin: 0.7rem 0 0.35rem;
+  font-size: 2rem;
+  color: #10233d;
+}
+
+.subtitle,
+.back-link,
+.phone-mask,
+.commerce-card p {
+  color: #5f7083;
+}
+
+.label {
+  display: block;
+  margin: 1rem 0 0.45rem;
+  font-weight: 600;
+  color: #10233d;
+}
+
+.phone-input {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid #d6dde6;
+  font-size: 1.2rem;
+  letter-spacing: 0.08em;
+}
+
+.primary-btn {
+  width: 100%;
+  margin-top: 1rem;
+  min-height: 3.2rem;
+  border: 0;
+  border-radius: 1rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+}
+
+.feedback {
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+  border-radius: 0.9rem;
+  color: #8a1c1c;
+  background: #fef2f2;
+}
+
+.list-block {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.commerce-card {
+  --brand-primary: #0f766e;
+  --brand-secondary: #14b8a6;
+  display: grid;
+  gap: 0.8rem;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
+  border: 1px solid #e2e8f0;
+  padding: 0.85rem 1rem;
+}
+
+.commerce-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.commerce-card h3 {
+  margin: 0;
+  color: #10233d;
+}
+
+.brand-logo {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: 0.8rem;
+  margin-bottom: 0.4rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.brand-fallback {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.8rem;
+  margin-bottom: 0.4rem;
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.commerce-card p {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+}
+
+.open {
+  font-weight: 700;
+  color: var(--brand-primary);
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.progress-meta strong {
+  font-size: 1.2rem;
+  color: #0f172a;
+}
+
+.progress-bar {
+  height: 0.75rem;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary));
+}
+
+.qr-row {
+  display: flex;
+  gap: 0.9rem;
+}
+
+.qr-image {
+  width: 8.8rem;
+  height: 8.8rem;
+  border-radius: 0.8rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0.4rem;
+}
+
+.qr-actions {
+  flex: 1;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.wallet-btn {
+  text-decoration: none;
+  min-height: 2.3rem;
+  border-radius: 0.7rem;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+}
+
+.wallet-btn.secondary {
+  color: #10233d;
+  background: #eef2ff;
+}
+
+@media (max-width: 560px) {
+  .qr-row {
+    flex-direction: column;
+  }
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: 1rem;
+  text-decoration: none;
+}

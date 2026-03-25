@@ -1,0 +1,35 @@
+<main class="access-shell" *ngIf="!cargando && comercio; else loadingState">
+  <section class="access-card" [style.--brand-primary]="comercio.color_primario" [style.--brand-secondary]="comercio.color_secundario">
+    <span class="eyebrow">Mi cuenta</span>
+    <h1>{{ comercio.nombre }}</h1>
+    <p class="subtitle">Ingresa tu telefono y recupera tu QR, progreso y recompensa.</p>
+
+    <label for="telefono" class="label">Telefono</label>
+    <input
+      id="telefono"
+      type="tel"
+      inputmode="numeric"
+      maxlength="10"
+      [value]="telefono"
+      (input)="onTelefonoInput($event)"
+      placeholder="Ej: 0987654321"
+      class="phone-input"
+    />
+
+    <button type="button" class="primary-btn" [disabled]="buscando" (click)="buscarCuenta()">
+      {{ buscando ? 'Buscando...' : 'Ver mi cuenta' }}
+    </button>
+
+    <p *ngIf="mensaje" class="feedback">{{ mensaje }}</p>
+
+    <a routerLink="/" class="back-link">Volver a caja</a>
+  </section>
+</main>
+
+<ng-template #loadingState>
+  <main class="access-shell">
+    <section class="access-card">
+      <p>{{ mensaje || 'Cargando...' }}</p>
+    </section>
+  </main>
+</ng-template>

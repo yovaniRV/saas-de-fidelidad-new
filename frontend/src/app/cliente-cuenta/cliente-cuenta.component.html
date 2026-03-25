@@ -1,0 +1,60 @@
+<main class="customer-shell">
+  <section class="customer-card" *ngIf="cargando">
+    <p>Cargando cuenta...</p>
+  </section>
+
+  <section class="customer-card" *ngIf="!cargando && error">
+    <p>{{ error }}</p>
+    <a routerLink="/mi-cuenta" class="back-link">Volver a mi perfil</a>
+  </section>
+
+  <section
+    class="customer-card"
+    *ngIf="!cargando && cuenta"
+    [style.--brand-primary]="cuenta.comercio.color_primario"
+    [style.--brand-secondary]="cuenta.comercio.color_secundario"
+  >
+    <div class="customer-hero">
+      <span class="eyebrow">{{ cuenta.comercio.nombre }}</span>
+      <img *ngIf="mostrarLogo" [src]="cuenta.comercio.logo_url" alt="Logo del comercio" class="brand-logo" loading="lazy" (error)="marcarLogoFallido()" />
+      <div *ngIf="!mostrarLogo" class="brand-fallback" aria-hidden="true">{{ inicialesComercio }}</div>
+      <h1>Tu progreso esta listo</h1>
+      <p>
+        {{ cuenta.comercio.recompensa_nombre }} al llegar a {{ cuenta.objetivo_visitas }} visitas.
+        Telefono asociado: {{ cuenta.telefono_mascarado }}
+      </p>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-meta">
+        <strong>{{ cuenta.visitas_actuales }}/{{ cuenta.objetivo_visitas }}</strong>
+        <span>visitas acumuladas</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" [style.width.%]="progreso"></div>
+      </div>
+    </div>
+
+    <div class="reward-total">
+      <span>Recompensas ganadas</span>
+      <strong>{{ cuenta.recompensas_total }}</strong>
+    </div>
+
+    <div class="qr-panel">
+      <img [src]="qrDataUrl" alt="Codigo QR del cliente" class="qr-image" />
+      <p>Muestra este QR en caja para registrar la visita en segundos.</p>
+    </div>
+
+    <div class="wallet-grid">
+      <a class="wallet-card" [href]="cuenta.wallet_links.apple" target="_blank" rel="noreferrer">Apple Wallet</a>
+      <a class="wallet-card" [href]="cuenta.wallet_links.google" target="_blank" rel="noreferrer">Google Wallet</a>
+    </div>
+
+    <p class="wallet-note">
+      Estos enlaces dejan la cuenta lista para integracion wallet. En Apple Wallet y Google Wallet la emision real de pases
+      requiere certificados o credenciales del proveedor.
+    </p>
+
+    <a routerLink="/mi-cuenta" class="back-link">Volver a mi perfil global</a>
+  </section>
+</main>

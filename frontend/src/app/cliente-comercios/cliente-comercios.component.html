@@ -1,0 +1,72 @@
+<main class="global-shell">
+  <section class="global-card">
+    <span class="eyebrow">Mi fidelidad</span>
+    <h1>Todos mis comercios</h1>
+    <p class="subtitle">Usa tu telefono para ver en que comercios tienes visitas, con QR y wallet en tu mismo perfil.</p>
+
+    <label for="telefono" class="label">Telefono</label>
+    <input
+      id="telefono"
+      type="tel"
+      inputmode="numeric"
+      maxlength="10"
+      [value]="telefono"
+      (input)="onTelefonoInput($event)"
+      class="phone-input"
+      placeholder="Ej: 0987654321"
+    />
+
+    <button type="button" class="primary-btn" [disabled]="cargando" (click)="buscarComercios()">
+      {{ cargando ? 'Buscando...' : 'Buscar mis cuentas' }}
+    </button>
+
+    <p *ngIf="mensaje" class="feedback">{{ mensaje }}</p>
+
+    <div *ngIf="data" class="list-block">
+      <p class="phone-mask">Telefono: {{ data.telefono_mascarado }}</p>
+
+      <article
+        *ngFor="let cuenta of data.cuentas"
+        class="commerce-card"
+        [style.--brand-primary]="cuenta.comercio.color_primario"
+        [style.--brand-secondary]="cuenta.comercio.color_secundario"
+      >
+        <div class="commerce-head">
+          <div>
+            <img
+              *ngIf="mostrarLogo(cuenta.public_id, cuenta.comercio.logo_url)"
+              [src]="cuenta.comercio.logo_url"
+              class="brand-logo"
+              alt="Logo del comercio"
+              loading="lazy"
+              (error)="marcarLogoError(cuenta.public_id)"
+            />
+            <div *ngIf="!mostrarLogo(cuenta.public_id, cuenta.comercio.logo_url)" class="brand-fallback" aria-hidden="true">
+              {{ inicialesComercio(cuenta.comercio.nombre) }}
+            </div>
+            <h3>{{ cuenta.comercio.nombre }}</h3>
+            <p>{{ cuenta.comercio.recompensa_nombre }}</p>
+          </div>
+          <span class="open">{{ cuenta.comercio.slug }}</span>
+        </div>
+
+        <div class="progress-meta">
+          <strong>{{ cuenta.visitas_actuales }}/{{ cuenta.objetivo_visitas }}</strong>
+          <span>{{ cuenta.recompensas_total }} recompensas</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="progreso(cuenta.visitas_actuales, cuenta.objetivo_visitas)"></div>
+        </div>
+
+        <div class="qr-row">
+          <img [src]="qrPorCuenta[cuenta.public_id]" class="qr-image" alt="QR del comercio" />
+          <div class="qr-actions">
+            <a class="wallet-btn" [href]="cuenta.wallet_links.apple" target="_blank" rel="noreferrer">Apple Wallet</a>
+            <a class="wallet-btn" [href]="cuenta.wallet_links.google" target="_blank" rel="noreferrer">Google Wallet</a>
+            <a class="wallet-btn secondary" [routerLink]="['/comercio', cuenta.comercio.slug, 'cliente', cuenta.public_id]">Ver detalle</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+</main>

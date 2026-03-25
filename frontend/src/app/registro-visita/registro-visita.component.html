@@ -1,0 +1,209 @@
+<main class="layout">
+  <section
+    class="card shell-card"
+    [style.--accent]="comercio?.color_primario || '#0f766e'"
+    [style.--accent-2]="comercio?.color_secundario || '#14b8a6'"
+  >
+    <div class="hero-strip">
+      <div>
+        <span class="eyebrow">Caja express</span>
+        <img
+          *ngIf="mostrarLogo(comercio?.logo_url, 'hero')"
+          [src]="comercio?.logo_url || ''"
+          alt="Logo del comercio"
+          class="brand-logo"
+          loading="lazy"
+          (error)="marcarLogoError('hero')"
+        />
+        <div *ngIf="!mostrarLogo(comercio?.logo_url, 'hero')" class="brand-fallback" aria-hidden="true">
+          {{ inicialesComercio(comercio?.nombre) }}
+        </div>
+        <h1>{{ comercio?.nombre || 'Fidelidad que se siente premium' }}</h1>
+        <p class="subtitle">
+          {{ comercio?.descripcion || 'Registra por telefono o escaneando el QR del cliente en segundos.' }}
+        </p>
+      </div>
+      <div class="hero-stat">
+        <strong>{{ comercio?.visitas_objetivo || 5 }}</strong>
+        <span>{{ comercio?.recompensa_nombre || 'visitas por recompensa' }}</span>
+      </div>
+    </div>
+
+    <div *ngIf="!autenticado" class="login-block">
+      <div class="section-header">
+        <h2>Ingreso de cajero</h2>
+        <p>Protegido con bloqueo temporal por intentos fallidos.</p>
+      </div>
+
+      <label for="comercioSlug" class="label">Slug del comercio</label>
+      <input
+        id="comercioSlug"
+        type="text"
+        [value]="comercioSlug"
+        (input)="onComercioSlugInput($event)"
+        (blur)="onComercioSlugBlur()"
+        class="text-input"
+        placeholder="Ej: demo-cafe"
+      />
+
+      <label for="username" class="label">Usuario</label>
+      <input
+        id="username"
+        type="text"
+        [value]="username"
+        (input)="onUsernameInput($event)"
+        class="text-input"
+        placeholder="Usuario"
+      />
+
+      <label for="password" class="label">Contrasena</label>
+      <input
+        id="password"
+        type="password"
+        [value]="password"
+        (input)="onPasswordInput($event)"
+        class="text-input"
+        placeholder="Contrasena"
+      />
+
+      <button type="button" class="primary-btn" [disabled]="cargandoLogin" (click)="iniciarSesion()">
+        {{ cargandoLogin ? 'Ingresando...' : 'Iniciar Sesion' }}
+      </button>
+
+      <p *ngIf="mensajeLogin" class="feedback warning">{{ mensajeLogin }}</p>
+
+      <p class="back-link customer-link">Portal exclusivo para cajeros.</p>
+    </div>
+
+    <div *ngIf="autenticado" class="registro-block">
+      <div class="session-row">
+        <span class="session-tag">Sesion activa</span>
+        <div class="session-actions">
+          <button type="button" class="link-btn" (click)="alternarConfiguracion()">Personalizar comercio</button>
+          <button type="button" class="link-btn" (click)="cerrarSesion()">Cerrar sesion</button>
+        </div>
+      </div>
+
+      <section *ngIf="configuracionAbierta" class="config-panel">
+        <div class="section-header">
+          <h2>Configuracion del comercio</h2>
+          <p>Logo, colores, meta de visitas y nombre de recompensa.</p>
+        </div>
+
+        <label class="label" for="nombreComercio">Nombre</label>
+        <input id="nombreComercio" class="text-input" [value]="comercioForm.nombre" (input)="onConfigInput('nombre', $event)" />
+
+        <label class="label" for="logoUrl">Logo URL HTTPS opcional</label>
+        <input id="logoUrl" class="text-input" [value]="comercioForm.logo_url || ''" (input)="onConfigInput('logo_url', $event)" placeholder="Preferible usar el upload JPG del servidor" />
+
+        <label class="label" for="logoFile">Subir logo JPG</label>
+        <input id="logoFile" type="file" accept=".jpg,.jpeg,image/jpeg" class="text-input file-input" (change)="onLogoFileSelected($event)" />
+
+        <img
+          *ngIf="mostrarLogo(comercio?.logo_url, 'preview')"
+          [src]="comercio?.logo_url || ''"
+          alt="Preview del logo"
+          class="logo-preview"
+          loading="lazy"
+          (error)="marcarLogoError('preview')"
+        />
+        <div *ngIf="!mostrarLogo(comercio?.logo_url, 'preview')" class="logo-preview logo-fallback" aria-hidden="true">
+          {{ inicialesComercio(comercioForm.nombre) }}
+        </div>
+
+        <label class="label" for="descripcion">Descripcion</label>
+        <textarea id="descripcion" class="text-input text-area" (input)="onConfigInput('descripcion', $event)">{{ comercioForm.descripcion || '' }}</textarea>
+
+        <div class="color-grid">
+          <div>
+            <label class="label" for="colorPrimario">Color primario</label>
+            <input id="colorPrimario" type="color" class="color-input" [value]="comercioForm.color_primario" (input)="onConfigInput('color_primario', $event)" />
+          </div>
+          <div>
+            <label class="label" for="colorSecundario">Color secundario</label>
+            <input id="colorSecundario" type="color" class="color-input" [value]="comercioForm.color_secundario" (input)="onConfigInput('color_secundario', $event)" />
+          </div>
+        </div>
+
+        <label class="label" for="metaVisitas">Meta de visitas</label>
+        <input id="metaVisitas" type="number" min="1" max="50" class="text-input" [value]="comercioForm.visitas_objetivo" (input)="onConfigInput('visitas_objetivo', $event)" />
+
+        <label class="label" for="recompensaNombre">Nombre de la recompensa</label>
+        <input id="recompensaNombre" class="text-input" [value]="comercioForm.recompensa_nombre" (input)="onConfigInput('recompensa_nombre', $event)" />
+
+        <button type="button" class="primary-btn" [disabled]="guardandoConfig" (click)="guardarConfiguracionComercio()">
+          {{ guardandoConfig ? 'Guardando...' : 'Guardar configuracion' }}
+        </button>
+
+        <p *ngIf="mensajeConfig" class="feedback">{{ mensajeConfig }}</p>
+      </section>
+
+      <div class="switcher">
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="modoRegistro === 'telefono'"
+          (click)="cambiarModo('telefono')"
+        >
+          Telefono
+        </button>
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="modoRegistro === 'qr'"
+          (click)="cambiarModo('qr')"
+        >
+          Escanear QR
+        </button>
+      </div>
+
+      <div *ngIf="modoRegistro === 'telefono'" class="entry-panel">
+        <label for="telefono" class="label">Telefono</label>
+        <input
+          id="telefono"
+          type="tel"
+          inputmode="numeric"
+          maxlength="10"
+          placeholder="Ej: 0987654321"
+          [value]="telefono"
+          (input)="onTelefonoInput($event)"
+          class="phone-input"
+        />
+
+        <button
+          type="button"
+          class="primary-btn"
+          [disabled]="cargando"
+          (click)="registrarVisita()"
+        >
+          {{ cargando ? 'Registrando...' : 'Registrar Visita' }}
+        </button>
+      </div>
+
+      <div *ngIf="modoRegistro === 'qr'" class="entry-panel qr-panel">
+        <div id="qr-reader" class="qr-reader"></div>
+        <p class="qr-help">Apunta la camara al QR que el cliente muestra desde su cuenta.</p>
+        <p *ngIf="escanerError" class="feedback warning">{{ escanerError }}</p>
+      </div>
+
+      <p *ngIf="mensaje" class="feedback" [class.reward]="esRecompensa">
+        {{ mensaje }}
+      </p>
+
+      <section *ngIf="ultimoCliente" class="customer-preview">
+        <div>
+          <span class="mini-label">Cliente actual</span>
+          <h3>{{ ultimoCliente.telefono_mascarado }}</h3>
+          <p>
+            {{ ultimoCliente.visitas_actuales }}/{{ ultimoCliente.objetivo_visitas }} visitas activas
+            · {{ ultimoCliente.recompensas_total }} recompensas historicas
+          </p>
+        </div>
+
+        <a [routerLink]="['/comercio', ultimoCliente.comercio.slug, 'cliente', ultimoCliente.public_id]" class="secondary-btn">
+          Ver cuenta del cliente
+        </a>
+      </section>
+    </div>
+  </section>
+</main>

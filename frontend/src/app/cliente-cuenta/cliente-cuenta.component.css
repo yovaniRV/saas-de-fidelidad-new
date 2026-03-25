@@ -1,0 +1,173 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+}
+
+.customer-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.28), transparent 28%),
+    linear-gradient(155deg, #f6efe4 0%, #edf7f2 50%, #f9fbfd 100%);
+}
+
+.customer-card {
+  --brand-primary: #0f766e;
+  --brand-secondary: #f59e0b;
+  width: min(100%, 31rem);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 1.5rem;
+  padding: 1.4rem;
+  box-shadow: 0 24px 70px rgba(18, 38, 63, 0.12);
+}
+
+.brand-logo {
+  display: block;
+  width: 4.2rem;
+  height: 4.2rem;
+  object-fit: cover;
+  border-radius: 1rem;
+  margin: 0.7rem 0 0.25rem;
+  background: #fff;
+  border: 1px solid rgba(214, 221, 230, 0.9);
+}
+
+.brand-fallback {
+  display: grid;
+  place-items: center;
+  width: 4.2rem;
+  height: 4.2rem;
+  margin: 0.7rem 0 0.25rem;
+  border-radius: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+}
+
+.customer-hero h1 {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 2rem;
+  line-height: 1;
+  color: #14213d;
+}
+
+.customer-hero p,
+.reward-total span,
+.progress-meta span,
+.qr-panel p {
+  margin: 0;
+  color: #52606d;
+}
+
+.eyebrow {
+  display: inline-block;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-primary) 15%, white);
+  color: var(--brand-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.progress-block {
+  margin-top: 1.25rem;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.55rem;
+}
+
+.progress-meta strong,
+.reward-total strong {
+  font-size: 1.7rem;
+  color: #0f172a;
+}
+
+.progress-bar {
+  height: 0.9rem;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary));
+}
+
+.reward-total {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: #f8fafc;
+}
+
+.qr-panel {
+  margin-top: 1rem;
+  text-align: center;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(240,249,255,0.95));
+}
+
+.qr-image {
+  width: min(100%, 14rem);
+  border-radius: 1rem;
+  background: #fff;
+  padding: 0.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+}
+
+.wallet-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.wallet-card,
+.back-link {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.wallet-note {
+  margin: 0.9rem 0 0;
+  color: #5b6472;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.wallet-card {
+  min-height: 3.2rem;
+  border-radius: 1rem;
+  color: #fff;
+  background: linear-gradient(135deg, #111827, #334155);
+}
+
+.back-link {
+  margin-top: 1rem;
+  color: var(--brand-primary);
+}
+
+@media (max-width: 560px) {
+  .wallet-grid {
+    grid-template-columns: 1fr;
+  }
+}
