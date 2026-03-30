@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd frontend && npm run build -- --configuration production",
+  "outputDirectory": "frontend/dist/saas-fidelidad-frontend/browser",
+  "installCommand": "cd frontend && npm install",
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
