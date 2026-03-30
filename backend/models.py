@@ -18,6 +18,8 @@ class Comercio(Base):
     visitas_objetivo = Column(Integer, default=5, nullable=False)
     recompensa_nombre = Column(String(120), nullable=False, default="Bebida gratis")
     descripcion = Column(String(255), nullable=True)
+    momento_recomendado = Column(String(20), nullable=True)
+    mensaje_contextual = Column(String(160), nullable=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -29,6 +31,19 @@ class Cajero(Base):
     username = Column(String(100), nullable=False)
     password = Column(String(255), nullable=False)
     nombre_mostrado = Column(String(120), nullable=True)
+    rol = Column(String(20), nullable=False, default="cajero")
+    activo = Column(Integer, nullable=False, default=1)
+    creado_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AdminUsuario(Base):
+    __tablename__ = "admin_usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    nombre_mostrado = Column(String(120), nullable=True)
+    activo = Column(Integer, nullable=False, default=1)
     creado_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

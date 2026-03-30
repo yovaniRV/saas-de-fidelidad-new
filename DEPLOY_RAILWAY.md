@@ -93,3 +93,20 @@ npx serve -s dist/saas-fidelidad-frontend -l $PORT
 4. Registro de visita funciona
 5. `/health` muestra `rate_limit_backend = redis`
 6. En tabla `auditoria_acciones` aparecen eventos `rate_limited` al forzar 429
+
+## 7) Query SQL rapida de metricas (hero vs card vs wallet)
+
+Si quieres auditar conversion por comercio sin pantalla, puedes usar esta query sobre `auditoria_acciones`:
+
+```sql
+SELECT
+  comercio_id,
+  SUM(CASE WHEN accion = 'analytics_evento' AND detalle LIKE '%evento=abrir_cuenta_cliente%' AND detalle LIKE '%origen=hero%' THEN 1 ELSE 0 END) AS hero_clicks,
+  SUM(CASE WHEN accion = 'analytics_evento' AND detalle LIKE '%evento=abrir_cuenta_cliente%' AND detalle LIKE '%origen=card%' THEN 1 ELSE 0 END) AS card_clicks,
+  SUM(CASE WHEN accion = 'analytics_evento' AND detalle LIKE '%evento=wallet_click%' AND detalle LIKE '%origen=apple_wallet%' THEN 1 ELSE 0 END) AS wallet_apple_clicks,
+  SUM(CASE WHEN accion = 'analytics_evento' AND detalle LIKE '%evento=wallet_click%' AND detalle LIKE '%origen=google_wallet%' THEN 1 ELSE 0 END) AS wallet_google_clicks,
+  SUM(CASE WHEN accion = 'analytics_evento' THEN 1 ELSE 0 END) AS total_clicks
+FROM auditoria_acciones
+GROUP BY comercio_id
+ORDER BY total_clicks DESC;
+```

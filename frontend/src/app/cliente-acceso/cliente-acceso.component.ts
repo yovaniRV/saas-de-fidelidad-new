@@ -64,7 +64,7 @@ export class ClienteAccesoComponent implements OnInit {
         this.router.navigate(['/comercio', this.comercioSlug, 'cliente', response.public_id]);
       },
       error: () => {
-        this.mensaje = 'No encontramos una cuenta para ese telefono en este comercio.';
+        this.mensaje = 'No fue posible abrir tu cuenta ahora mismo.';
         this.buscando = false;
       }
     });

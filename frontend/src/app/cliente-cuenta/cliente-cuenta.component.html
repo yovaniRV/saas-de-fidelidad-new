@@ -1,11 +1,15 @@
 <main class="customer-shell">
   <section class="customer-card" *ngIf="cargando">
-    <p>Cargando cuenta...</p>
+    <div class="customer-body">
+      <p>Cargando cuenta...</p>
+    </div>
   </section>
 
   <section class="customer-card" *ngIf="!cargando && error">
-    <p>{{ error }}</p>
-    <a routerLink="/mi-cuenta" class="back-link">Volver a mi perfil</a>
+    <div class="customer-body">
+      <p>{{ error }}</p>
+      <a routerLink="/mi-cuenta" class="back-link">Volver a mi perfil</a>
+    </div>
   </section>
 
   <section
@@ -18,43 +22,45 @@
       <span class="eyebrow">{{ cuenta.comercio.nombre }}</span>
       <img *ngIf="mostrarLogo" [src]="cuenta.comercio.logo_url" alt="Logo del comercio" class="brand-logo" loading="lazy" (error)="marcarLogoFallido()" />
       <div *ngIf="!mostrarLogo" class="brand-fallback" aria-hidden="true">{{ inicialesComercio }}</div>
-      <h1>Tu progreso esta listo</h1>
+      <h1>Tu tarjeta de fidelidad</h1>
       <p>
-        {{ cuenta.comercio.recompensa_nombre }} al llegar a {{ cuenta.objetivo_visitas }} visitas.
-        Telefono asociado: {{ cuenta.telefono_mascarado }}
+        Gana una {{ cuenta.comercio.recompensa_nombre }} al llegar a {{ cuenta.objetivo_visitas }} visitas.
+        Telefono: {{ cuenta.telefono_mascarado }}
       </p>
     </div>
 
-    <div class="progress-block">
-      <div class="progress-meta">
-        <strong>{{ cuenta.visitas_actuales }}/{{ cuenta.objetivo_visitas }}</strong>
-        <span>visitas acumuladas</span>
+    <div class="customer-body">
+      <div class="progress-block">
+        <div class="progress-meta">
+          <strong>{{ cuenta.visitas_actuales }}/{{ cuenta.objetivo_visitas }}</strong>
+          <span>visitas acumuladas</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="progreso"></div>
+        </div>
       </div>
-      <div class="progress-bar">
-        <div class="progress-fill" [style.width.%]="progreso"></div>
+
+      <div class="reward-total">
+        <span>Recompensas ganadas</span>
+        <strong>{{ cuenta.recompensas_total }} 🎁</strong>
       </div>
+
+      <div class="qr-panel">
+        <img [src]="qrDataUrl" alt="Codigo QR del cliente" class="qr-image" />
+        <p>Muestra este QR en caja para registrar tu visita</p>
+      </div>
+
+      <div class="wallet-grid">
+        <a class="wallet-card" [href]="cuenta.wallet_links.apple" target="_blank" rel="noreferrer" (click)="registrarClickWalletApple()">🍎 Apple Wallet</a>
+        <a class="wallet-card" [href]="cuenta.wallet_links.google" target="_blank" rel="noreferrer" (click)="registrarClickWalletGoogle()">Google Wallet</a>
+      </div>
+
+      <p class="wallet-note">
+        Los wallets requieren certificados del proveedor para emision real de pases.
+      </p>
+
+      <a routerLink="/mi-cuenta" class="back-link">← Volver a mis comercios</a>
     </div>
-
-    <div class="reward-total">
-      <span>Recompensas ganadas</span>
-      <strong>{{ cuenta.recompensas_total }}</strong>
-    </div>
-
-    <div class="qr-panel">
-      <img [src]="qrDataUrl" alt="Codigo QR del cliente" class="qr-image" />
-      <p>Muestra este QR en caja para registrar la visita en segundos.</p>
-    </div>
-
-    <div class="wallet-grid">
-      <a class="wallet-card" [href]="cuenta.wallet_links.apple" target="_blank" rel="noreferrer">Apple Wallet</a>
-      <a class="wallet-card" [href]="cuenta.wallet_links.google" target="_blank" rel="noreferrer">Google Wallet</a>
-    </div>
-
-    <p class="wallet-note">
-      Estos enlaces dejan la cuenta lista para integracion wallet. En Apple Wallet y Google Wallet la emision real de pases
-      requiere certificados o credenciales del proveedor.
-    </p>
-
-    <a routerLink="/mi-cuenta" class="back-link">Volver a mi perfil global</a>
   </section>
 </main>
+

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { environment } from '../../environments/environment';
@@ -25,6 +25,83 @@ export interface ComercioBrandingResponse {
   visitas_objetivo: number;
   recompensa_nombre: string;
   descripcion: string | null;
+  momento_recomendado?: string | null;
+  mensaje_contextual?: string | null;
+}
+
+export interface AnalyticsEventRequest {
+  comercio_slug: string;
+  public_id: string | null;
+  evento: string;
+  origen: string;
+}
+
+export interface AnalyticsEventResponse {
+  status: string;
+}
+
+export interface AnalyticsSummaryResponse {
+  hero_clicks: number;
+  card_clicks: number;
+  wallet_apple_clicks: number;
+  wallet_google_clicks: number;
+  total_clicks: number;
+}
+
+export interface CajeroCreateRequest {
+  username: string;
+  password: string;
+  nombre_mostrado: string | null;
+}
+
+export interface CajeroResponse {
+  id: number;
+  username: string;
+  nombre_mostrado: string | null;
+  rol: 'cajero' | 'jefe';
+  activo: boolean;
+}
+
+export interface ComercioCreateRequest {
+  slug: string;
+  nombre: string;
+  jefe_username: string;
+  jefe_password: string;
+  jefe_nombre_mostrado: string | null;
+  color_primario: string;
+  color_secundario: string;
+  visitas_objetivo: number;
+  recompensa_nombre: string;
+  descripcion: string | null;
+}
+
+export interface ComercioCreateResponse {
+  comercio: ComercioBrandingResponse;
+  jefe: CajeroResponse;
+}
+
+export interface AdminComercioResumenResponse {
+  slug: string;
+  nombre: string;
+}
+
+export interface AdminPersonalComercioResponse {
+  comercio: AdminComercioResumenResponse;
+  personal: CajeroResponse[];
+}
+
+export interface AdminJefeCreateRequest {
+  username: string;
+  password: string;
+  nombre_mostrado: string | null;
+}
+
+export interface AdminCambiarRolRequest {
+  rol: 'jefe' | 'cajero';
+}
+
+export interface AdminCambiarEstadoRequest {
+  activo: boolean;
 }
 
 export interface ComercioConfigUpdateRequest {
@@ -35,6 +112,8 @@ export interface ComercioConfigUpdateRequest {
   visitas_objetivo: number;
   recompensa_nombre: string;
   descripcion: string | null;
+  momento_recomendado: string | null;
+  mensaje_contextual: string | null;
 }
 
 export interface ClienteCuentaResponse {
@@ -57,7 +136,8 @@ export interface ClienteMisComerciosResponse {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
-  comercio: ComercioBrandingResponse;
+  rol: 'admin' | 'jefe' | 'cajero';
+  comercio: ComercioBrandingResponse | null;
 }
 
 @Injectable({
@@ -70,15 +150,24 @@ export class VisitaService {
   private readonly qrUrl = `${this.baseUrl}/registrar-visita-qr`;
   private readonly tokenKey = 'saas_fidelidad_token';
   private readonly comercioKey = 'saas_fidelidad_comercio_slug';
+  private readonly roleKey = 'saas_fidelidad_rol';
 
   constructor(private readonly http: HttpClient) {}
 
-  login(comercioSlug: string, username: string, password: string): Observable<LoginResponse> {
-    return this.http.post<LoginResponse>(this.loginUrl, {
-      comercio_slug: comercioSlug,
-      username,
-      password
-    });
+  private authHeaders(): HttpHeaders | undefined {
+    const token = this.obtenerToken();
+    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : undefined;
+  }
+
+  login(username: string, password: string): Observable<LoginResponse> {
+    // Enviar el objeto directamente para que Angular lo serialice como JSON
+    return this.http.post<LoginResponse>(
+      this.loginUrl,
+      { username: username?.trim(), password: password?.trim() },
+      {
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 
   guardarToken(token: string): void {
@@ -89,9 +178,14 @@ export class VisitaService {
     localStorage.setItem(this.comercioKey, slug);
   }
 
+  guardarRol(rol: LoginResponse['rol']): void {
+    localStorage.setItem(this.roleKey, rol);
+  }
+
   limpiarToken(): void {
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.comercioKey);
+    localStorage.removeItem(this.roleKey);
   }
 
   estaAutenticado(): boolean {
@@ -106,21 +200,21 @@ export class VisitaService {
     return localStorage.getItem(this.comercioKey);
   }
 
-  registrarVisita(telefono: string): Observable<RegistrarVisitaResponse> {
-    const token = this.obtenerToken();
-    const headers = token
-      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
-      : undefined;
+  obtenerRol(): LoginResponse['rol'] | null {
+    const rol = localStorage.getItem(this.roleKey);
+    if (rol === 'admin' || rol === 'jefe' || rol === 'cajero') {
+      return rol;
+    }
+    return null;
+  }
 
+  registrarVisita(telefono: string): Observable<RegistrarVisitaResponse> {
+    const headers = this.authHeaders();
     return this.http.post<RegistrarVisitaResponse>(this.apiUrl, { telefono }, { headers });
   }
 
   registrarVisitaPorQr(publicId: string): Observable<RegistrarVisitaResponse> {
-    const token = this.obtenerToken();
-    const headers = token
-      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
-      : undefined;
-
+    const headers = this.authHeaders();
     return this.http.post<RegistrarVisitaResponse>(this.qrUrl, { public_id: publicId }, { headers });
   }
 
@@ -129,19 +223,12 @@ export class VisitaService {
   }
 
   actualizarComercio(payload: ComercioConfigUpdateRequest): Observable<ComercioBrandingResponse> {
-    const token = this.obtenerToken();
-    const headers = token
-      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
-      : undefined;
-
+    const headers = this.authHeaders();
     return this.http.put<ComercioBrandingResponse>(`${this.baseUrl}/comercios/configuracion`, payload, { headers });
   }
 
   subirLogoComercio(file: File): Observable<ComercioBrandingResponse> {
-    const token = this.obtenerToken();
-    const headers = token
-      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
-      : undefined;
+    const headers = this.authHeaders();
 
     const formData = new FormData();
     formData.append('logo', file);
@@ -161,5 +248,71 @@ export class VisitaService {
 
   obtenerMisComercios(telefono: string): Observable<ClienteMisComerciosResponse> {
     return this.http.post<ClienteMisComerciosResponse>(`${this.baseUrl}/clientes/mis-comercios`, { telefono });
+  }
+
+  registrarEventoAnalitico(payload: AnalyticsEventRequest): Observable<AnalyticsEventResponse> {
+    return this.http.post<AnalyticsEventResponse>(`${this.baseUrl}/analytics/eventos`, payload);
+  }
+
+  obtenerResumenAnalyticsComercio(desde?: string | null, hasta?: string | null): Observable<AnalyticsSummaryResponse> {
+    const headers = this.authHeaders();
+
+    let params = new HttpParams();
+    if (desde) {
+      params = params.set('desde', desde);
+    }
+    if (hasta) {
+      params = params.set('hasta', hasta);
+    }
+
+    return this.http.get<AnalyticsSummaryResponse>(`${this.baseUrl}/analytics/resumen/comercio`, { headers, params });
+  }
+
+  listarCajeros(): Observable<CajeroResponse[]> {
+    const headers = this.authHeaders();
+
+    return this.http.get<CajeroResponse[]>(`${this.baseUrl}/cajeros`, { headers });
+  }
+
+  crearCajero(payload: CajeroCreateRequest): Observable<CajeroResponse> {
+    const headers = this.authHeaders();
+
+    return this.http.post<CajeroResponse>(`${this.baseUrl}/cajeros`, payload, { headers });
+  }
+
+  crearComercio(payload: ComercioCreateRequest): Observable<ComercioCreateResponse> {
+    const headers = this.authHeaders();
+
+    return this.http.post<ComercioCreateResponse>(`${this.baseUrl}/comercios`, payload, { headers });
+  }
+
+  listarComerciosAdmin(): Observable<AdminComercioResumenResponse[]> {
+    const headers = this.authHeaders();
+
+    return this.http.get<AdminComercioResumenResponse[]>(`${this.baseUrl}/admin/comercios`, { headers });
+  }
+
+  crearJefeAdmin(comercioSlug: string, payload: AdminJefeCreateRequest): Observable<CajeroResponse> {
+    const headers = this.authHeaders();
+
+    return this.http.post<CajeroResponse>(`${this.baseUrl}/admin/comercios/${comercioSlug}/jefes`, payload, { headers });
+  }
+
+  listarPersonalAdmin(comercioSlug: string): Observable<AdminPersonalComercioResponse> {
+    const headers = this.authHeaders();
+
+    return this.http.get<AdminPersonalComercioResponse>(`${this.baseUrl}/admin/comercios/${comercioSlug}/personal`, { headers });
+  }
+
+  cambiarRolAdmin(cajeroId: number, payload: AdminCambiarRolRequest): Observable<CajeroResponse> {
+    const headers = this.authHeaders();
+
+    return this.http.patch<CajeroResponse>(`${this.baseUrl}/admin/cajeros/${cajeroId}/rol`, payload, { headers });
+  }
+
+  cambiarEstadoAdmin(cajeroId: number, payload: AdminCambiarEstadoRequest): Observable<CajeroResponse> {
+    const headers = this.authHeaders();
+
+    return this.http.patch<CajeroResponse>(`${this.baseUrl}/admin/cajeros/${cajeroId}/estado`, payload, { headers });
   }
 }

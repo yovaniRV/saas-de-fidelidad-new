@@ -79,4 +79,38 @@ export class ClienteCuentaComponent implements OnInit {
       .map((segmento) => segmento[0]?.toUpperCase() ?? '')
       .join('') || 'LC';
   }
+
+  registrarClickWalletApple(): void {
+    if (!this.cuenta) {
+      return;
+    }
+
+    this.visitaService.registrarEventoAnalitico({
+      comercio_slug: this.cuenta.comercio.slug,
+      public_id: this.cuenta.public_id,
+      evento: 'wallet_click',
+      origen: 'apple_wallet',
+    }).subscribe({
+      error: () => {
+        // La navegacion no depende del evento analitico.
+      }
+    });
+  }
+
+  registrarClickWalletGoogle(): void {
+    if (!this.cuenta) {
+      return;
+    }
+
+    this.visitaService.registrarEventoAnalitico({
+      comercio_slug: this.cuenta.comercio.slug,
+      public_id: this.cuenta.public_id,
+      evento: 'wallet_click',
+      origen: 'google_wallet',
+    }).subscribe({
+      error: () => {
+        // La navegacion no depende del evento analitico.
+      }
+    });
+  }
 }

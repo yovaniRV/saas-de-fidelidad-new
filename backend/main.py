@@ -1,13 +1,14 @@
 import os
 import ipaddress
 import secrets
+import socket
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 from urllib.parse import urlparse
 
 import jwt
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
@@ -18,14 +19,25 @@ import models
 import schemas
 from database import SessionLocal, engine, ensure_sqlite_schema
 from rate_limit import build_rate_limiter
-from security_utils import verify_password
+from security_utils import hash_password, verify_password
 
 models.Base.metadata.create_all(bind=engine)
 ensure_sqlite_schema()
 
 app = FastAPI(title="SaaS Fidelidad API")
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY") or secrets.token_urlsafe(48)
+def _load_or_create_secret_key() -> str:
+    env_key = os.getenv("JWT_SECRET_KEY")
+    if env_key:
+        return env_key
+    secret_file = Path(__file__).resolve().parent / ".secret_key"
+    if secret_file.exists():
+        return secret_file.read_text().strip()
+    new_key = secrets.token_urlsafe(48)
+    secret_file.write_text(new_key)
+    return new_key
+
+SECRET_KEY = _load_or_create_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
 MAX_LOGIN_FAILED_ATTEMPTS = 5
@@ -39,6 +51,18 @@ ALLOWED_HOSTS = [
     for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver,*.up.railway.app").split(",")
     if host.strip()
 ]
+# Añadir la IP local automáticamente para permitir acceso desde la red local
+def _get_local_ip() -> str | None:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as _s:
+            _s.connect(("8.8.8.8", 80))
+            return _s.getsockname()[0]
+    except Exception:
+        return None
+
+_local_ip = _get_local_ip()
+if _local_ip and _local_ip not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_local_ip)
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://127.0.0.1:4200").split(",")
@@ -78,6 +102,7 @@ app.mount("/static", StaticFiles(directory=str(UPLOAD_DIR.parent)), name="static
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOWED_ORIGINS,
+    allow_origin_regex=r"https?://(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -92,7 +117,7 @@ def is_sensitive_path(path: str) -> bool:
     if path in {"/login", "/registrar-visita", "/registrar-visita-qr", "/clientes/mis-comercios"}:
         return True
 
-    if path.startswith("/comercios/configuracion") or path.startswith("/clientes/"):
+    if path.startswith("/comercios/configuracion") or path.startswith("/clientes/") or path.startswith("/analytics/"):
         return True
 
     if path.startswith("/static/") or path.startswith("/docs") or path.startswith("/openapi") or path.startswith("/redoc"):
@@ -110,11 +135,18 @@ def is_sensitive_path(path: str) -> bool:
 @app.middleware("http")
 async def apply_security_headers(request: Request, call_next):
     response = await call_next(request)
+    response.headers["X-Request-Id"] = uuid4().hex
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    response.headers["Origin-Agent-Cluster"] = "?1"
     response.headers["Permissions-Policy"] = "camera=(), geolocation=(), microphone=()"
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+
+    if not request.url.path.startswith("/docs") and not request.url.path.startswith("/redoc") and not request.url.path.startswith("/openapi"):
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
     if request.url.scheme == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -206,11 +238,11 @@ def enforce_login_rate_limit(request: Request, payload: schemas.LoginRequest, db
     client_ip = get_client_ip(request)
     apply_rate_limit(f"login:ip:{client_ip}", "login_ip", request, db, f"ip:{client_ip}", payload.username)
     apply_rate_limit(
-        f"login:user:{payload.comercio_slug}:{payload.username.lower()}",
+        f"login:user:{payload.username.lower()}",
         "login_subject",
         request,
         db,
-        f"login:{payload.comercio_slug}:{payload.username.lower()}",
+        f"login:{payload.username.lower()}",
         payload.username,
     )
 
@@ -274,14 +306,22 @@ def rate_limit_cuenta_cliente_global(
     enforce_subject_rate_limit(request, f"cuenta-global:{public_id}", db, "cliente-cuenta-global")
 
 
-def create_access_token(username: str, comercio_id: int, comercio_slug: str) -> str:
+def create_access_token(
+    username: str,
+    role: str,
+    comercio_id: int | None = None,
+    comercio_slug: str | None = None,
+) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": username,
-        "comercio_id": comercio_id,
-        "comercio_slug": comercio_slug,
+        "role": role,
         "exp": expire,
     }
+    if comercio_id is not None:
+        payload["comercio_id"] = comercio_id
+    if comercio_slug is not None:
+        payload["comercio_slug"] = comercio_slug
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -299,6 +339,27 @@ def log_auditoria(
         detalle=detalle,
     )
     db.add(evento)
+
+
+def build_cajero_response(cajero: models.Cajero) -> schemas.CajeroResponse:
+    return schemas.CajeroResponse(
+        id=cajero.id,
+        username=cajero.username,
+        nombre_mostrado=cajero.nombre_mostrado,
+        rol=cajero.rol,
+        activo=bool(cajero.activo),
+    )
+
+
+def contar_jefes_activos(db: Session, comercio_id: int, excluding_id: int | None = None) -> int:
+    query = db.query(models.Cajero).filter(
+        models.Cajero.comercio_id == comercio_id,
+        models.Cajero.rol == "jefe",
+        models.Cajero.activo == 1,
+    )
+    if excluding_id is not None:
+        query = query.filter(models.Cajero.id != excluding_id)
+    return query.count()
 
 
 def get_estado_login(db: Session, login_key: str) -> models.EstadoLoginCajero:
@@ -333,6 +394,8 @@ def build_comercio_response(comercio: models.Comercio) -> schemas.ComercioBrandi
         visitas_objetivo=comercio.visitas_objetivo,
         recompensa_nombre=comercio.recompensa_nombre,
         descripcion=comercio.descripcion,
+        momento_recomendado=comercio.momento_recomendado,
+        mensaje_contextual=comercio.mensaje_contextual,
     )
 
 
@@ -424,11 +487,12 @@ def registrar_visita_a_cliente(
     )
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict[str, str | int]:
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict[str, str | int | None]:
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
+        role = payload.get("role", "cajero")
         comercio_id = payload.get("comercio_id")
         comercio_slug = payload.get("comercio_slug")
     except jwt.PyJWTError as exc:
@@ -437,16 +501,34 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             detail="Token invalido o expirado",
         ) from exc
 
-    if not username or not comercio_id or not comercio_slug:
+    if not username or role not in {"admin", "jefe", "cajero"}:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalido",
         )
+
+    if role != "admin" and (not comercio_id or not comercio_slug):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalido",
+        )
+
     return {
         "username": username,
+        "role": role,
         "comercio_id": comercio_id,
         "comercio_slug": comercio_slug,
     }
+
+
+def ensure_admin(auth: dict[str, str | int | None]) -> None:
+    if auth.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administrador")
+
+
+def ensure_jefe_or_admin(auth: dict[str, str | int | None]) -> None:
+    if auth.get("role") not in {"jefe", "admin"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permiso solo para jefe o administrador")
 
 
 def rate_limit_registrar_visita(
@@ -454,6 +536,8 @@ def rate_limit_registrar_visita(
     auth: dict[str, str | int] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
+    if auth.get("role") == "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El administrador no registra visitas")
     enforce_subject_rate_limit(request, f"{auth['comercio_slug']}:{auth['username']}", db, str(auth["username"]), int(auth["comercio_id"]))
 
 
@@ -463,6 +547,8 @@ def rate_limit_registrar_visita_qr(
     auth: dict[str, str | int] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
+    if auth.get("role") == "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El administrador no registra visitas")
     enforce_subject_rate_limit(
         request,
         f"{auth['comercio_slug']}:{auth['username']}:{payload.public_id}",
@@ -477,7 +563,18 @@ def rate_limit_configuracion(
     auth: dict[str, str | int] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
+    if auth.get("role") == "admin":
+        return
     enforce_subject_rate_limit(request, f"config:{auth['comercio_slug']}:{auth['username']}", db, str(auth["username"]), int(auth["comercio_id"]))
+
+
+def rate_limit_admin_actions(
+    request: Request,
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    ensure_admin(auth)
+    enforce_subject_rate_limit(request, f"admin:{auth['username']}:{request.url.path}", db, str(auth["username"]))
 
 
 @app.get("/health")
@@ -486,6 +583,123 @@ def health() -> dict[str, str]:
         "status": "ok",
         "rate_limit_backend": RATE_LIMIT_BACKEND,
     }
+
+
+@app.post("/analytics/eventos", response_model=schemas.AnalyticsEventResponse)
+def registrar_evento_analitico(
+    payload: schemas.AnalyticsEventRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    comercio = get_comercio_by_slug(db, payload.comercio_slug)
+    detalle = (
+        f"evento={payload.evento} origen={payload.origen} public_id={payload.public_id or '-'} "
+        f"ruta={request.url.path} ip={get_client_ip(request)}"
+    )
+    log_auditoria(db, "cliente-analytics", "analytics_evento", detalle, comercio.id)
+    db.commit()
+    return schemas.AnalyticsEventResponse(status="ok")
+
+
+@app.get("/analytics/resumen/comercio", response_model=schemas.AnalyticsSummaryResponse)
+def obtener_resumen_analitico_comercio(
+    desde: date | None = Query(default=None),
+    hasta: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int] = Depends(get_current_user),
+):
+    if auth.get("role") == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usa panel admin para metricas globales")
+
+    if desde and hasta and desde > hasta:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rango de fechas invalido")
+
+    comercio_id = int(auth["comercio_id"])
+    base_query = db.query(models.AuditoriaAccion).filter(
+        models.AuditoriaAccion.comercio_id == comercio_id,
+        models.AuditoriaAccion.accion == "analytics_evento",
+    )
+
+    if desde:
+        desde_dt = datetime(desde.year, desde.month, desde.day)
+        base_query = base_query.filter(models.AuditoriaAccion.creado_en >= desde_dt)
+    if hasta:
+        hasta_dt_exclusive = datetime(hasta.year, hasta.month, hasta.day) + timedelta(days=1)
+        base_query = base_query.filter(models.AuditoriaAccion.creado_en < hasta_dt_exclusive)
+
+    hero_clicks = base_query.filter(
+        models.AuditoriaAccion.detalle.contains("evento=abrir_cuenta_cliente"),
+        models.AuditoriaAccion.detalle.contains("origen=hero"),
+    ).count()
+    card_clicks = base_query.filter(
+        models.AuditoriaAccion.detalle.contains("evento=abrir_cuenta_cliente"),
+        models.AuditoriaAccion.detalle.contains("origen=card"),
+    ).count()
+    wallet_apple_clicks = base_query.filter(
+        models.AuditoriaAccion.detalle.contains("evento=wallet_click"),
+        models.AuditoriaAccion.detalle.contains("origen=apple_wallet"),
+    ).count()
+    wallet_google_clicks = base_query.filter(
+        models.AuditoriaAccion.detalle.contains("evento=wallet_click"),
+        models.AuditoriaAccion.detalle.contains("origen=google_wallet"),
+    ).count()
+
+    return schemas.AnalyticsSummaryResponse(
+        hero_clicks=hero_clicks,
+        card_clicks=card_clicks,
+        wallet_apple_clicks=wallet_apple_clicks,
+        wallet_google_clicks=wallet_google_clicks,
+        total_clicks=hero_clicks + card_clicks + wallet_apple_clicks + wallet_google_clicks,
+    )
+
+
+@app.post("/comercios", response_model=schemas.ComercioCreateResponse)
+def crear_comercio(
+    payload: schemas.ComercioCreateRequest,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+
+    existente = db.query(models.Comercio).filter(models.Comercio.slug == payload.slug).first()
+    if existente:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ese slug de comercio ya existe")
+
+    usuario_existente = db.query(models.Cajero).filter(models.Cajero.username == payload.jefe_username).first()
+    if usuario_existente:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ese usuario de jefe ya existe. Usa uno unico")
+
+    comercio = models.Comercio(
+        slug=payload.slug,
+        nombre=payload.nombre,
+        color_primario=payload.color_primario,
+        color_secundario=payload.color_secundario,
+        visitas_objetivo=payload.visitas_objetivo,
+        recompensa_nombre=payload.recompensa_nombre,
+        descripcion=payload.descripcion,
+    )
+    db.add(comercio)
+    db.flush()
+
+    cajero = models.Cajero(
+        comercio_id=comercio.id,
+        username=payload.jefe_username,
+        password=hash_password(payload.jefe_password),
+        nombre_mostrado=payload.jefe_nombre_mostrado,
+        rol="jefe",
+        activo=1,
+    )
+    db.add(cajero)
+    log_auditoria(db, str(auth["username"]), "comercio_creado", f"Nuevo comercio {payload.slug}", comercio.id)
+    db.commit()
+    db.refresh(comercio)
+    db.refresh(cajero)
+
+    return schemas.ComercioCreateResponse(
+        comercio=build_comercio_response(comercio),
+        jefe=build_cajero_response(cajero),
+    )
 
 
 @app.post(
@@ -498,10 +712,101 @@ def login(
     db: Session = Depends(get_db),
     _: None = Depends(rate_limit_login),
 ):
-    comercio = get_comercio_by_slug(db, payload.comercio_slug)
-    login_key = f"{payload.comercio_slug}:{payload.username}"
+    login_key = payload.username.lower()
     estado = get_estado_login(db, login_key)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    admin = db.query(models.AdminUsuario).filter(models.AdminUsuario.username == payload.username).first()
+    if admin:
+        if not admin.activo:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario desactivado")
+
+        if estado.bloqueado_hasta and estado.bloqueado_hasta > now:
+            log_auditoria(
+                db,
+                payload.username,
+                "login_bloqueado",
+                f"Bloqueado hasta {estado.bloqueado_hasta.isoformat()}",
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Cuenta bloqueada temporalmente. Intenta nuevamente en unos minutos.",
+            )
+
+        if not verify_password(admin.password, payload.password):
+            estado.intentos_fallidos += 1
+            detalle = f"Intento fallido {estado.intentos_fallidos}/{MAX_LOGIN_FAILED_ATTEMPTS}"
+            log_auditoria(db, payload.username, "login_fallido", detalle)
+
+            if estado.intentos_fallidos >= MAX_LOGIN_FAILED_ATTEMPTS:
+                estado.bloqueado_hasta = now + timedelta(minutes=LOGIN_LOCK_MINUTES)
+                log_auditoria(
+                    db,
+                    payload.username,
+                    "login_bloqueado_activado",
+                    f"Bloqueado hasta {estado.bloqueado_hasta.isoformat()}",
+                )
+                db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Demasiados intentos fallidos. Cuenta bloqueada temporalmente.",
+                )
+
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales invalidas")
+
+        estado.intentos_fallidos = 0
+        estado.bloqueado_hasta = None
+        log_auditoria(db, payload.username, "login_exitoso", "Inicio de sesion admin correcto")
+        db.commit()
+
+        token = create_access_token(payload.username, "admin")
+        return schemas.LoginResponse(
+            access_token=token,
+            rol="admin",
+            comercio=None,
+        )
+
+    cajeros = db.query(models.Cajero).filter(models.Cajero.username == payload.username).all()
+    if not cajeros:
+        estado.intentos_fallidos += 1
+        detalle = f"Intento fallido {estado.intentos_fallidos}/{MAX_LOGIN_FAILED_ATTEMPTS}"
+        log_auditoria(db, payload.username, "login_fallido", detalle)
+
+        if estado.intentos_fallidos >= MAX_LOGIN_FAILED_ATTEMPTS:
+            estado.bloqueado_hasta = now + timedelta(minutes=LOGIN_LOCK_MINUTES)
+            log_auditoria(
+                db,
+                payload.username,
+                "login_bloqueado_activado",
+                f"Bloqueado hasta {estado.bloqueado_hasta.isoformat()}",
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Demasiados intentos fallidos. Cuenta bloqueada temporalmente.",
+            )
+
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales invalidas",
+        )
+
+    if len(cajeros) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Usuario ambiguo. Pide al administrador un usuario unico.",
+        )
+
+    cajero = cajeros[0]
+    if not cajero.activo:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario desactivado")
+
+    comercio = db.query(models.Comercio).filter(models.Comercio.id == cajero.comercio_id).first()
+    if not comercio:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Comercio invalido")
 
     if estado.bloqueado_hasta and estado.bloqueado_hasta > now:
         log_auditoria(
@@ -517,12 +822,7 @@ def login(
             detail="Cuenta bloqueada temporalmente. Intenta nuevamente en unos minutos.",
         )
 
-    cajero = db.query(models.Cajero).filter(
-        models.Cajero.comercio_id == comercio.id,
-        models.Cajero.username == payload.username,
-    ).first()
-
-    if not cajero or not verify_password(cajero.password, payload.password):
+    if not verify_password(cajero.password, payload.password):
         estado.intentos_fallidos += 1
         detalle = f"Intento fallido {estado.intentos_fallidos}/{MAX_LOGIN_FAILED_ATTEMPTS}"
         log_auditoria(db, payload.username, "login_fallido", detalle, comercio.id)
@@ -553,9 +853,10 @@ def login(
     log_auditoria(db, payload.username, "login_exitoso", "Inicio de sesion correcto", comercio.id)
     db.commit()
 
-    token = create_access_token(payload.username, comercio.id, comercio.slug)
+    token = create_access_token(payload.username, cajero.rol, comercio.id, comercio.slug)
     return schemas.LoginResponse(
         access_token=token,
+        rol=cajero.rol,
         comercio=build_comercio_response(comercio),
     )
 
@@ -621,6 +922,11 @@ def actualizar_comercio_configuracion(
     auth: dict[str, str | int] = Depends(get_current_user),
     _: None = Depends(rate_limit_configuracion),
 ):
+    ensure_jefe_or_admin(auth)
+
+    if auth.get("role") == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un administrador debe gestionar configuracion desde panel admin")
+
     comercio = db.query(models.Comercio).filter(models.Comercio.id == auth["comercio_id"]).first()
     if not comercio:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Comercio invalido")
@@ -633,12 +939,167 @@ def actualizar_comercio_configuracion(
     comercio.visitas_objetivo = payload.visitas_objetivo
     comercio.recompensa_nombre = payload.recompensa_nombre
     comercio.descripcion = payload.descripcion
+    comercio.momento_recomendado = payload.momento_recomendado
+    comercio.mensaje_contextual = payload.mensaje_contextual
     if previous_logo_url != comercio.logo_url and payload.logo_url != previous_logo_url:
         delete_managed_logo_file(previous_logo_url)
     log_auditoria(db, str(auth["username"]), "comercio_actualizado", "Branding y metas actualizadas", comercio.id)
     db.commit()
     db.refresh(comercio)
     return build_comercio_response(comercio)
+
+
+@app.get("/cajeros", response_model=list[schemas.CajeroResponse])
+def listar_cajeros(
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+):
+    ensure_jefe_or_admin(auth)
+    if auth.get("role") == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usa el panel admin para ver cajeros por comercio")
+
+    comercio_id = int(auth["comercio_id"])
+    cajeros = db.query(models.Cajero).filter(models.Cajero.comercio_id == comercio_id).order_by(models.Cajero.id.desc()).all()
+    return [build_cajero_response(cajero) for cajero in cajeros]
+
+
+@app.get("/admin/comercios", response_model=list[schemas.AdminComercioResumenResponse])
+def listar_comercios_admin(
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+    comercios = db.query(models.Comercio).order_by(models.Comercio.nombre.asc()).all()
+    return [schemas.AdminComercioResumenResponse(slug=item.slug, nombre=item.nombre) for item in comercios]
+
+
+@app.post("/admin/comercios/{slug}/jefes", response_model=schemas.CajeroResponse)
+def crear_jefe_para_comercio(
+    slug: str,
+    payload: schemas.AdminJefeCreateRequest,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+    comercio = get_comercio_by_slug(db, slug)
+
+    existe = db.query(models.Cajero).filter(models.Cajero.username == payload.username).first()
+    if existe:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ese usuario ya existe. Usa un nombre de usuario unico")
+
+    jefe = models.Cajero(
+        comercio_id=comercio.id,
+        username=payload.username,
+        password=hash_password(payload.password),
+        nombre_mostrado=payload.nombre_mostrado,
+        rol="jefe",
+        activo=1,
+    )
+    db.add(jefe)
+    log_auditoria(db, str(auth["username"]), "jefe_creado", f"Nuevo jefe {payload.username} para {slug}", comercio.id)
+    db.commit()
+    db.refresh(jefe)
+    return build_cajero_response(jefe)
+
+
+@app.get("/admin/comercios/{slug}/personal", response_model=schemas.AdminPersonalComercioResponse)
+def listar_personal_por_comercio_admin(
+    slug: str,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+    comercio = get_comercio_by_slug(db, slug)
+    personal = db.query(models.Cajero).filter(models.Cajero.comercio_id == comercio.id).order_by(models.Cajero.rol.desc(), models.Cajero.id.asc()).all()
+    return schemas.AdminPersonalComercioResponse(
+        comercio=schemas.AdminComercioResumenResponse(slug=comercio.slug, nombre=comercio.nombre),
+        personal=[build_cajero_response(item) for item in personal],
+    )
+
+
+@app.patch("/admin/cajeros/{cajero_id}/rol", response_model=schemas.CajeroResponse)
+def cambiar_rol_cajero_admin(
+    cajero_id: int,
+    payload: schemas.AdminCambiarRolRequest,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+    cajero = db.query(models.Cajero).filter(models.Cajero.id == cajero_id).first()
+    if not cajero:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    if cajero.rol == payload.rol:
+        return build_cajero_response(cajero)
+
+    if cajero.rol == "jefe" and payload.rol == "cajero" and contar_jefes_activos(db, cajero.comercio_id, cajero.id) == 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El comercio debe mantener al menos un jefe activo")
+
+    cajero.rol = payload.rol
+    log_auditoria(db, str(auth["username"]), "rol_actualizado", f"Usuario {cajero.username} ahora es {payload.rol}", cajero.comercio_id)
+    db.commit()
+    db.refresh(cajero)
+    return build_cajero_response(cajero)
+
+
+@app.patch("/admin/cajeros/{cajero_id}/estado", response_model=schemas.CajeroResponse)
+def cambiar_estado_cajero_admin(
+    cajero_id: int,
+    payload: schemas.AdminCambiarEstadoRequest,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+    cajero = db.query(models.Cajero).filter(models.Cajero.id == cajero_id).first()
+    if not cajero:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    if not payload.activo and cajero.rol == "jefe" and contar_jefes_activos(db, cajero.comercio_id, cajero.id) == 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El comercio debe mantener al menos un jefe activo")
+
+    cajero.activo = 1 if payload.activo else 0
+    accion = "usuario_activado" if payload.activo else "usuario_desactivado"
+    detalle = f"Usuario {cajero.username} {'activado' if payload.activo else 'desactivado'}"
+    log_auditoria(db, str(auth["username"]), accion, detalle, cajero.comercio_id)
+    db.commit()
+    db.refresh(cajero)
+    return build_cajero_response(cajero)
+
+
+@app.post("/cajeros", response_model=schemas.CajeroResponse)
+def crear_cajero(
+    payload: schemas.CajeroCreateRequest,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_configuracion),
+):
+    ensure_jefe_or_admin(auth)
+    if auth.get("role") == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usa /admin/comercios/{slug}/jefes para administrar jerarquia")
+
+    comercio_id = int(auth["comercio_id"])
+    existe = db.query(models.Cajero).filter(models.Cajero.username == payload.username).first()
+    if existe:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ese usuario ya existe. Usa un nombre de usuario unico")
+
+    cajero = models.Cajero(
+        comercio_id=comercio_id,
+        username=payload.username,
+        password=hash_password(payload.password),
+        nombre_mostrado=payload.nombre_mostrado,
+        rol="cajero",
+        activo=1,
+    )
+    db.add(cajero)
+    log_auditoria(db, str(auth["username"]), "cajero_creado", f"Nuevo cajero {payload.username}", comercio_id)
+    db.commit()
+    db.refresh(cajero)
+    return build_cajero_response(cajero)
 
 
 @app.post("/comercios/configuracion/logo", response_model=schemas.ComercioBrandingResponse)
@@ -648,6 +1109,10 @@ async def subir_logo_comercio(
     auth: dict[str, str | int] = Depends(get_current_user),
     _: None = Depends(rate_limit_configuracion),
 ):
+    ensure_jefe_or_admin(auth)
+    if auth.get("role") == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Un administrador debe gestionar configuracion desde panel admin")
+
     comercio = db.query(models.Comercio).filter(models.Comercio.id == auth["comercio_id"]).first()
     if not comercio:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Comercio invalido")
@@ -700,7 +1165,11 @@ def acceso_cliente(
         models.Cliente.telefono == payload.telefono,
     ).first()
     if not cliente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+        cliente = models.Cliente(comercio_id=comercio.id, telefono=payload.telefono, visitas=0)
+        db.add(cliente)
+        log_auditoria(db, "cliente-publico", "cliente_creado_desde_acceso", f"Telefono {payload.telefono}", comercio.id)
+        db.commit()
+        db.refresh(cliente)
 
     return build_cliente_response(cliente, comercio)
 
@@ -713,7 +1182,10 @@ def obtener_mis_comercios(
 ):
     clientes = db.query(models.Cliente).filter(models.Cliente.telefono == payload.telefono).all()
     if not clientes:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+        return schemas.ClienteMisComerciosResponse(
+            telefono_mascarado=mask_phone(payload.telefono),
+            cuentas=[],
+        )
 
     comercios = db.query(models.Comercio).all()
     comercios_por_id = {comercio.id: comercio for comercio in comercios}
@@ -726,7 +1198,10 @@ def obtener_mis_comercios(
         cuentas.append(build_cliente_response(cliente, comercio))
 
     if not cuentas:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+        return schemas.ClienteMisComerciosResponse(
+            telefono_mascarado=mask_phone(payload.telefono),
+            cuentas=[],
+        )
 
     cuentas.sort(key=lambda item: item.comercio.nombre.lower())
     return schemas.ClienteMisComerciosResponse(

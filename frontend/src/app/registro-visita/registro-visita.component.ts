@@ -1,10 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewChecked, Component, OnDestroy, OnInit } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { Html5Qrcode } from 'html5-qrcode';
 
 import {
+  AnalyticsSummaryResponse,
+  CajeroResponse,
   ClienteCuentaResponse,
   ComercioConfigUpdateRequest,
   ComercioBrandingResponse,
@@ -21,7 +23,7 @@ import {
   styleUrls: ['./registro-visita.component.css']
 })
 export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnInit {
-  comercioSlug = 'demo-cafe';
+  comercioSlug = '';
   comercio: ComercioBrandingResponse | null = null;
   username = '';
   password = '';
@@ -29,16 +31,32 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
   mensaje = '';
   mensajeLogin = '';
   mensajeConfig = '';
+  mensajeComercioNuevo = '';
   modoRegistro: 'telefono' | 'qr' = 'telefono';
   qrActivo = false;
   escanerError = '';
   autenticado = false;
+  rolUsuario: 'admin' | 'jefe' | 'cajero' | null = null;
   esRecompensa = false;
   cargando = false;
   cargandoLogin = false;
   guardandoConfig = false;
-  configuracionAbierta = false;
+  cargandoMetricas = false;
+  seccionActiva: 'registro' | 'metricas' | 'cajeros' | 'configuracion' = 'registro';
   ultimoCliente: ClienteCuentaResponse | null = null;
+  resumenAnalytics: AnalyticsSummaryResponse | null = null;
+  cajeros: CajeroResponse[] = [];
+  cargandoCajeros = false;
+  guardandoCajero = false;
+  mensajeCajero = '';
+  nuevoCajero = {
+    username: '',
+    password: '',
+    nombre_mostrado: ''
+  };
+  analyticsDesde = '';
+  analyticsHasta = '';
+  presetRango: '7d' | '30d' | '90d' = '30d';
   comercioForm: ComercioConfigUpdateRequest = {
     nombre: '',
     logo_url: null,
@@ -46,20 +64,34 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
     color_secundario: '#f59e0b',
     visitas_objetivo: 5,
     recompensa_nombre: 'Bebida gratis',
-    descripcion: null
+    descripcion: null,
+    momento_recomendado: null,
+    mensaje_contextual: null
   };
   logoErrores: Record<string, boolean> = {};
 
   private qrScanner: Html5Qrcode | null = null;
   private scannerMountPending = false;
 
-  constructor(private readonly visitaService: VisitaService) {
+  constructor(
+    private readonly visitaService: VisitaService,
+    private readonly router: Router,
+  ) {
     this.autenticado = this.visitaService.estaAutenticado();
-    this.comercioSlug = this.visitaService.obtenerComercioSlug() ?? 'demo-cafe';
+    this.comercioSlug = this.visitaService.obtenerComercioSlug() ?? '';
+    this.rolUsuario = this.visitaService.obtenerRol();
+    this.inicializarRangoMetricas();
   }
 
   ngOnInit(): void {
-    this.cargarComercio();
+    if (this.autenticado && this.rolUsuario === 'admin') {
+      void this.router.navigate(['/admin']);
+      return;
+    }
+
+    if (this.comercioSlug) {
+      this.cargarComercio();
+    }
   }
 
   ngAfterViewChecked(): void {
@@ -78,46 +110,51 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
     this.username = input.value;
   }
 
-  onComercioSlugInput(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.comercioSlug = input.value.trim().toLowerCase();
-  }
-
-  onComercioSlugBlur(): void {
-    if (this.comercioSlug) {
-      this.cargarComercio();
-    }
-  }
-
   onPasswordInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.password = input.value;
   }
 
   iniciarSesion(): void {
-    if (!this.comercioSlug || !this.username || !this.password) {
-      this.mensajeLogin = 'Ingresa comercio, usuario y contrasena.';
+    if (!this.username || !this.password) {
+      this.mensajeLogin = 'Ingresa usuario y contrasena.';
       return;
     }
 
     this.cargandoLogin = true;
     this.mensajeLogin = '';
 
-    this.visitaService.login(this.comercioSlug, this.username, this.password).subscribe({
+    this.visitaService.login(this.username, this.password).subscribe({
       next: (response: LoginResponse) => {
         this.visitaService.guardarToken(response.access_token);
-        this.visitaService.guardarComercioSlug(this.comercioSlug);
-        this.comercio = response.comercio;
-        this.sincronizarFormularioComercio(response.comercio);
+        this.rolUsuario = response.rol;
+        this.visitaService.guardarRol(response.rol);
         this.autenticado = true;
+        if (response.rol === 'admin') {
+          this.cargandoLogin = false;
+          void this.router.navigate(['/admin']);
+          return;
+        } else {
+          this.comercioSlug = response.comercio?.slug ?? '';
+          this.visitaService.guardarComercioSlug(this.comercioSlug);
+          this.comercio = response.comercio;
+          if (response.comercio) {
+            this.sincronizarFormularioComercio(response.comercio);
+          }
+          this.seccionActiva = 'registro';
+          this.cargarResumenAnalytics();
+          if (this.puedeGestionarCajeros) {
+            this.cargarCajeros();
+          }
+        }
         this.cargandoLogin = false;
         this.mensaje = '';
       },
       error: (err) => {
         if (err?.status === 429) {
           this.mensajeLogin = err?.error?.detail ?? 'Cuenta bloqueada temporalmente.';
-        } else if (err?.status === 404) {
-          this.mensajeLogin = 'Ese comercio no existe.';
+        } else if (err?.status === 409) {
+          this.mensajeLogin = err?.error?.detail ?? 'Usuario ambiguo. Contacta al administrador.';
         } else {
           this.mensajeLogin = 'Credenciales invalidas.';
         }
@@ -129,17 +166,33 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
   cerrarSesion(): void {
     this.visitaService.limpiarToken();
     this.autenticado = false;
+    this.rolUsuario = null;
     this.mensaje = '';
     this.mensajeLogin = 'Sesion cerrada.';
     this.ultimoCliente = null;
+    this.resumenAnalytics = null;
+    this.seccionActiva = 'registro';
+    this.cajeros = [];
+    this.nuevoCajero = { username: '', password: '', nombre_mostrado: '' };
+    this.mensajeCajero = '';
     this.detenerEscanerQr();
   }
 
   cargarComercio(): void {
+    if (!this.comercioSlug) {
+      return;
+    }
+
     this.visitaService.obtenerComercio(this.comercioSlug).subscribe({
       next: (response) => {
         this.comercio = response;
         this.sincronizarFormularioComercio(response);
+        if (this.autenticado) {
+          this.cargarResumenAnalytics();
+          if (this.puedeGestionarCajeros) {
+            this.cargarCajeros();
+          }
+        }
       },
       error: () => {
         this.comercio = null;
@@ -156,7 +209,9 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
       color_secundario: comercio.color_secundario,
       visitas_objetivo: comercio.visitas_objetivo,
       recompensa_nombre: comercio.recompensa_nombre,
-      descripcion: comercio.descripcion
+      descripcion: comercio.descripcion,
+      momento_recomendado: comercio.momento_recomendado ?? null,
+      mensaje_contextual: comercio.mensaje_contextual ?? null
     };
   }
 
@@ -177,9 +232,24 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
       .join('') || 'LC';
   }
 
-  alternarConfiguracion(): void {
-    this.configuracionAbierta = !this.configuracionAbierta;
-    this.mensajeConfig = '';
+  cambiarSeccion(seccion: 'registro' | 'metricas' | 'cajeros' | 'configuracion'): void {
+    this.seccionActiva = seccion;
+  }
+
+  get esAdmin(): boolean {
+    return this.rolUsuario === 'admin';
+  }
+
+  get esJefe(): boolean {
+    return this.rolUsuario === 'jefe';
+  }
+
+  get puedeGestionarCajeros(): boolean {
+    return this.esAdmin || this.esJefe;
+  }
+
+  get puedePersonalizarComercio(): boolean {
+    return this.esJefe;
   }
 
   onConfigInput(field: keyof ComercioConfigUpdateRequest, event: Event): void {
@@ -205,6 +275,8 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
       next: (response) => {
         this.comercio = response;
         this.sincronizarFormularioComercio(response);
+        this.cargarResumenAnalytics();
+        this.cargarCajeros();
         this.guardandoConfig = false;
         this.mensajeConfig = 'Configuracion guardada.';
       },
@@ -235,6 +307,8 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
       next: (response) => {
         this.comercio = response;
         this.sincronizarFormularioComercio(response);
+        this.cargarResumenAnalytics();
+        this.cargarCajeros();
         this.guardandoConfig = false;
         this.mensajeConfig = 'Logo actualizado correctamente.';
         input.value = '';
@@ -376,6 +450,7 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
     this.visitaService.registrarVisita(this.telefono).subscribe({
       next: (response: RegistrarVisitaResponse) => {
         this.aplicarRespuestaRegistro(response);
+        this.cargarResumenAnalytics();
       },
       error: (err) => {
         this.esRecompensa = false;
@@ -390,4 +465,177 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
       }
     });
   }
+
+  cargarResumenAnalytics(): void {
+    if (!this.autenticado) {
+      this.resumenAnalytics = null;
+      return;
+    }
+
+    this.cargandoMetricas = true;
+    this.visitaService.obtenerResumenAnalyticsComercio(this.analyticsDesde || null, this.analyticsHasta || null).subscribe({
+      next: (resumen) => {
+        this.resumenAnalytics = resumen;
+        this.cargandoMetricas = false;
+      },
+      error: () => {
+        this.cargandoMetricas = false;
+      }
+    });
+  }
+
+  onAnalyticsDesdeInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.analyticsDesde = input.value;
+  }
+
+  onAnalyticsHastaInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.analyticsHasta = input.value;
+  }
+
+  aplicarFiltroMetricas(): void {
+    if (this.analyticsDesde && this.analyticsHasta && this.analyticsDesde > this.analyticsHasta) {
+      this.mensajeConfig = 'Rango de metricas invalido: la fecha desde no puede ser mayor que hasta.';
+      return;
+    }
+
+    this.mensajeConfig = '';
+    this.cargarResumenAnalytics();
+  }
+
+  limpiarFiltroMetricas(): void {
+    this.presetRango = '30d';
+    this.inicializarRangoMetricas();
+    this.mensajeConfig = '';
+    this.cargarResumenAnalytics();
+  }
+
+  aplicarPresetRango(preset: '7d' | '30d' | '90d'): void {
+    this.presetRango = preset;
+
+    const hoy = new Date();
+    const desde = new Date(hoy);
+    const dias = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
+    desde.setDate(desde.getDate() - dias);
+
+    this.analyticsHasta = this.formatearFechaInput(hoy);
+    this.analyticsDesde = this.formatearFechaInput(desde);
+    this.mensajeConfig = '';
+    this.cargarResumenAnalytics();
+  }
+
+  get porcentajeHero(): number {
+    if (!this.resumenAnalytics?.total_clicks) {
+      return 0;
+    }
+    return Math.round((this.resumenAnalytics.hero_clicks / this.resumenAnalytics.total_clicks) * 100);
+  }
+
+  get porcentajeCard(): number {
+    if (!this.resumenAnalytics?.total_clicks) {
+      return 0;
+    }
+    return Math.round((this.resumenAnalytics.card_clicks / this.resumenAnalytics.total_clicks) * 100);
+  }
+
+  get porcentajeWallet(): number {
+    if (!this.resumenAnalytics?.total_clicks) {
+      return 0;
+    }
+    const walletTotal = this.resumenAnalytics.wallet_apple_clicks + this.resumenAnalytics.wallet_google_clicks;
+    return Math.round((walletTotal / this.resumenAnalytics.total_clicks) * 100);
+  }
+
+  get insightPrincipalMetricas(): string {
+    if (!this.resumenAnalytics || this.resumenAnalytics.total_clicks === 0) {
+      return 'Todavia no hay clics suficientes. Prueba destacar una oferta en la hero y revisar en unas horas.';
+    }
+
+    const canales = [
+      { nombre: 'Hero principal', valor: this.resumenAnalytics.hero_clicks },
+      { nombre: 'Cards del listado', valor: this.resumenAnalytics.card_clicks },
+      { nombre: 'Wallets', valor: this.resumenAnalytics.wallet_apple_clicks + this.resumenAnalytics.wallet_google_clicks },
+    ].sort((a, b) => b.valor - a.valor);
+
+    return `${canales[0].nombre} lidera con ${canales[0].valor} clics en este rango.`;
+  }
+
+  private inicializarRangoMetricas(): void {
+    const hoy = new Date();
+    const hace30 = new Date(hoy);
+    hace30.setDate(hace30.getDate() - 30);
+
+    this.analyticsHasta = this.formatearFechaInput(hoy);
+    this.analyticsDesde = this.formatearFechaInput(hace30);
+  }
+
+  private formatearFechaInput(fecha: Date): string {
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  onNuevoCajeroInput(field: 'username' | 'password' | 'nombre_mostrado', event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.nuevoCajero = {
+      ...this.nuevoCajero,
+      [field]: input.value,
+    };
+  }
+
+  cargarCajeros(): void {
+    if (!this.autenticado || !this.esJefe) {
+      this.cajeros = [];
+      return;
+    }
+
+    this.cargandoCajeros = true;
+    this.visitaService.listarCajeros().subscribe({
+      next: (listado) => {
+        this.cajeros = listado;
+        this.cargandoCajeros = false;
+      },
+      error: () => {
+        this.cargandoCajeros = false;
+      }
+    });
+  }
+
+  crearNuevoCajero(): void {
+    if (!this.esJefe) {
+      this.mensajeCajero = 'Solo el jefe del comercio puede crear cajeros.';
+      return;
+    }
+
+    const username = this.nuevoCajero.username.trim();
+    const password = this.nuevoCajero.password.trim();
+    const nombreMostrado = this.nuevoCajero.nombre_mostrado.trim();
+
+    if (!username || !password) {
+      this.mensajeCajero = 'Usuario y contrasena son obligatorios.';
+      return;
+    }
+
+    this.guardandoCajero = true;
+    this.mensajeCajero = '';
+    this.visitaService.crearCajero({
+      username,
+      password,
+      nombre_mostrado: nombreMostrado || null,
+    }).subscribe({
+      next: () => {
+        this.guardandoCajero = false;
+        this.mensajeCajero = 'Cajero creado correctamente.';
+        this.nuevoCajero = { username: '', password: '', nombre_mostrado: '' };
+        this.cargarCajeros();
+      },
+      error: (err) => {
+        this.guardandoCajero = false;
+        this.mensajeCajero = err?.error?.detail ?? 'No fue posible crear el cajero.';
+      }
+    });
+  }
+
 }

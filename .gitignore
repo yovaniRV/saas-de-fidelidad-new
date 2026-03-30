@@ -25,3 +25,12 @@ frontend/.angular/
 .idea/
 Thumbs.db
 .DS_Store
+
+# SSL certificates (local dev only)
+cert.pem
+key.pem
+*.pem
+
+# Secret keys
+backend/.secret_key
+
