@@ -302,14 +302,6 @@ export class ClienteComerciosComponent implements AfterViewInit, OnDestroy, OnIn
     this.registrarEventoAnalitico('card', cuenta);
   }
 
-  registrarClickWalletApple(cuenta: ClienteCuentaResponse): void {
-    this.registrarEventoAnalitico('apple_wallet', cuenta, 'wallet_click');
-  }
-
-  registrarClickWalletGoogle(cuenta: ClienteCuentaResponse): void {
-    this.registrarEventoAnalitico('google_wallet', cuenta, 'wallet_click');
-  }
-
   tieneQr(publicId: string): boolean {
     return !!this.qrPorCuenta[publicId];
   }
@@ -327,10 +319,6 @@ export class ClienteComerciosComponent implements AfterViewInit, OnDestroy, OnIn
       return 'cercana';
     }
     return 'normal';
-  }
-
-  tieneWallet(link: string | null): boolean {
-    return !!link;
   }
 
   trackByCuenta(_: number, cuenta: ClienteCuentaResponse): string {
@@ -402,9 +390,9 @@ export class ClienteComerciosComponent implements AfterViewInit, OnDestroy, OnIn
   }
 
   private registrarEventoAnalitico(
-    origen: 'hero' | 'card' | 'apple_wallet' | 'google_wallet',
+    origen: 'hero' | 'card',
     cuenta: ClienteCuentaResponse,
-    evento: 'abrir_cuenta_cliente' | 'wallet_click' = 'abrir_cuenta_cliente'
+    evento: 'abrir_cuenta_cliente' = 'abrir_cuenta_cliente'
   ): void {
     this.visitaService.registrarEventoAnalitico({
       comercio_slug: cuenta.comercio.slug,

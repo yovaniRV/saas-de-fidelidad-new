@@ -208,6 +208,10 @@
   gap: 0.75rem;
 }
 
+.wallet-grid--actions {
+  margin-top: -0.35rem;
+}
+
 .wallet-card {
   display: flex;
   align-items: center;
@@ -222,6 +226,11 @@
   text-decoration: none;
   transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
   box-shadow: 0 4px 10px rgba(15,23,42,0.2);
+  border: none;
+}
+
+.wallet-card--alt {
+  background: linear-gradient(135deg, #0f766e, #0ea5a4);
 }
 
 .wallet-card:hover {
@@ -236,6 +245,10 @@
   font-size: 0.78rem;
   line-height: 1.5;
   text-align: center;
+}
+
+.wallet-note--ok {
+  color: #166534;
 }
 
 /* -- Back link ---------------------------- */

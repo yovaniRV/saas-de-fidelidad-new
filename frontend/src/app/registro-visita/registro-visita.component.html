@@ -82,7 +82,7 @@
       <section class="metrics-panel" *ngIf="seccionActiva === 'metricas'">
         <div class="section-header">
           <h2>Metricas de conversion</h2>
-          <p>Comparativa de intencion: hero vs cards y clics a wallets.</p>
+          <p>Comparativa de intencion entre hero y cards del listado.</p>
         </div>
 
         <div class="preset-row">
@@ -117,14 +117,6 @@
             <span>Cards</span>
             <strong>{{ resumenAnalytics.card_clicks }}</strong>
           </article>
-          <article class="metric-item">
-            <span>Apple Wallet</span>
-            <strong>{{ resumenAnalytics.wallet_apple_clicks }}</strong>
-          </article>
-          <article class="metric-item">
-            <span>Google Wallet</span>
-            <strong>{{ resumenAnalytics.wallet_google_clicks }}</strong>
-          </article>
           <article class="metric-item total">
             <span>Total</span>
             <strong>{{ resumenAnalytics.total_clicks }}</strong>
@@ -149,16 +141,6 @@
             </div>
             <div class="comparison-bar">
               <div class="comparison-fill card" [style.width.%]="porcentajeCard"></div>
-            </div>
-          </article>
-
-          <article class="comparison-item">
-            <div class="comparison-head">
-              <span>Wallets</span>
-              <strong>{{ porcentajeWallet }}%</strong>
-            </div>
-            <div class="comparison-bar">
-              <div class="comparison-fill wallet" [style.width.%]="porcentajeWallet"></div>
             </div>
           </article>
         </div>
@@ -243,7 +225,7 @@
         </div>
 
         <label class="label" for="descripcion">Descripcion</label>
-        <textarea id="descripcion" class="text-input text-area" (input)="onConfigInput('descripcion', $event)">{{ comercioForm.descripcion || '' }}</textarea>
+        <textarea id="descripcion" class="text-input text-area" [value]="comercioForm.descripcion || ''" (input)="onConfigInput('descripcion', $event)"></textarea>
 
         <label class="label" for="momentoRecomendado">Momento recomendado</label>
         <select id="momentoRecomendado" class="text-input" [value]="comercioForm.momento_recomendado || ''" (change)="onConfigInput('momento_recomendado', $event)">
@@ -255,7 +237,7 @@
         </select>
 
         <label class="label" for="mensajeContextual">Mensaje contextual (opcional)</label>
-        <textarea id="mensajeContextual" class="text-input text-area" (input)="onConfigInput('mensaje_contextual', $event)">{{ comercioForm.mensaje_contextual || '' }}</textarea>
+        <textarea id="mensajeContextual" class="text-input text-area" [value]="comercioForm.mensaje_contextual || ''" (input)="onConfigInput('mensaje_contextual', $event)"></textarea>
 
         <div class="color-grid">
           <div>

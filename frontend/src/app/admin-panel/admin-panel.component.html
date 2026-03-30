@@ -116,6 +116,74 @@
 
       <div class="divider"></div>
 
+      <!-- SECCIÓN: Suscripcion del comercio -->
+      <div class="panel-section">
+        <div class="section-title">
+          <span class="section-icon">💳</span>
+          <div>
+            <h2>Suscripcion mensual por negocio</h2>
+            <p>Controla estado, monto y proximo cobro del comercio seleccionado.</p>
+          </div>
+        </div>
+
+        <div class="subscription-summary" *ngIf="comercioJefeSlug">
+          <article class="subscription-card" *ngFor="let item of comerciosAdmin" [class.subscription-card--active]="item.slug === comercioJefeSlug">
+            <div class="subscription-card-head">
+              <strong>{{ item.nombre }}</strong>
+              <span class="role-badge" [class.role-jefe]="item.suscripcion.estado === 'activa' || item.suscripcion.estado === 'prueba'" [class.role-cajero]="item.suscripcion.estado !== 'activa' && item.suscripcion.estado !== 'prueba'">
+                {{ item.suscripcion.estado }}
+              </span>
+            </div>
+            <small>
+              Plan: {{ item.suscripcion.plan }} · ${{ item.suscripcion.monto_mxn }} MXN
+              <span *ngIf="item.suscripcion.proximo_cobro">· Cobro: {{ item.suscripcion.proximo_cobro }}</span>
+            </small>
+          </article>
+        </div>
+
+        <div class="fields-grid">
+          <div class="field-group">
+            <label class="label" for="susPlan">Plan</label>
+            <select id="susPlan" class="text-input select-input" [value]="suscripcionForm.plan" (change)="onSuscripcionInput('plan', $event)">
+              <option value="mensual">Mensual</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="anual">Anual</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="label" for="susEstado">Estado</label>
+            <select id="susEstado" class="text-input select-input" [value]="suscripcionForm.estado" (change)="onSuscripcionInput('estado', $event)">
+              <option value="prueba">Prueba</option>
+              <option value="activa">Activa</option>
+              <option value="vencida">Vencida</option>
+              <option value="suspendida">Suspendida</option>
+              <option value="cancelada">Cancelada</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="label" for="susMonto">Monto mensual (MXN)</label>
+            <input id="susMonto" type="number" min="0" class="text-input" [value]="suscripcionForm.monto_mxn" (input)="onSuscripcionInput('monto_mxn', $event)" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="susCobro">Proximo cobro</label>
+            <input id="susCobro" type="date" class="text-input" [value]="suscripcionForm.proximo_cobro || ''" (input)="onSuscripcionInput('proximo_cobro', $event)" />
+          </div>
+          <div class="field-group field-group--full">
+            <label class="label" for="susNotas">Notas (opcional)</label>
+            <textarea id="susNotas" class="text-input text-area" [value]="suscripcionForm.notas || ''" (input)="onSuscripcionInput('notas', $event)" placeholder="Detalle de facturacion, referencia o acuerdo comercial"></textarea>
+          </div>
+        </div>
+
+        <button type="button" class="secondary-btn" [disabled]="guardandoSuscripcion" (click)="guardarSuscripcionComercio()">
+          {{ guardandoSuscripcion ? 'Guardando...' : 'Guardar suscripcion' }}
+        </button>
+
+        <p *ngIf="mensajeSuscripcion" class="feedback" [class.success]="mensajeSuscripcionTipo === 'success'" [class.error]="mensajeSuscripcionTipo === 'error'">{{ mensajeSuscripcion }}</p>
+      </div>
+
+      <div class="divider"></div>
+
       <!-- SECCIÓN: Agregar jefe a comercio existente -->
       <div class="panel-section">
         <div class="section-title">

@@ -106,7 +106,7 @@
           </div>
         </div>
 
-        <a class="hero-link" [routerLink]="['/comercio', cuentaHero.comercio.slug, 'cliente', cuentaHero.public_id]" (click)="registrarClickHero(cuentaHero)">Abrir cuenta prioritaria</a>
+        <a class="hero-link" [routerLink]="['/c', cuentaHero.public_id]" (click)="registrarClickHero(cuentaHero)">Abrir cuenta prioritaria</a>
       </section>
 
       <p class="hero-note" *ngIf="cuentaHero && cuentasListado.length">La cuenta destacada se separa del listado para evitar repetir el mismo comercio dos veces.</p>
@@ -169,31 +169,7 @@
             <div class="qr-image qr-loading">Generando QR...</div>
           </ng-template>
           <div class="qr-actions">
-            <a
-              *ngIf="tieneWallet(cuenta.wallet_links.apple); else applePendiente"
-              class="wallet-btn"
-              [href]="cuenta.wallet_links.apple"
-              target="_blank"
-              rel="noreferrer"
-              (click)="registrarClickWalletApple(cuenta)"
-            >Apple Wallet</a>
-            <ng-template #applePendiente>
-              <span class="wallet-btn disabled">Apple Wallet pronto</span>
-            </ng-template>
-
-            <a
-              *ngIf="tieneWallet(cuenta.wallet_links.google); else googlePendiente"
-              class="wallet-btn"
-              [href]="cuenta.wallet_links.google"
-              target="_blank"
-              rel="noreferrer"
-              (click)="registrarClickWalletGoogle(cuenta)"
-            >Google Wallet</a>
-            <ng-template #googlePendiente>
-              <span class="wallet-btn disabled">Google Wallet pronto</span>
-            </ng-template>
-
-            <a class="wallet-btn secondary" [routerLink]="['/comercio', cuenta.comercio.slug, 'cliente', cuenta.public_id]" (click)="registrarClickCard(cuenta)">Ver detalle</a>
+            <a class="wallet-btn secondary" [routerLink]="['/c', cuenta.public_id]" (click)="registrarClickCard(cuenta)">Ver detalle</a>
           </div>
         </div>
       </article>

@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build -- --configuration production",
+  "outputDirectory": "dist/saas-fidelidad-frontend/browser",
+  "rewrites": [
+    {
+      "source": "/((?!.*\\.[a-zA-Z0-9]{1,6}$).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

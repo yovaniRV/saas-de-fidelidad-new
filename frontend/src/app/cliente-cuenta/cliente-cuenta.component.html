@@ -50,14 +50,12 @@
         <p>Muestra este QR en caja para registrar tu visita</p>
       </div>
 
-      <div class="wallet-grid">
-        <a class="wallet-card" [href]="cuenta.wallet_links.apple" target="_blank" rel="noreferrer" (click)="registrarClickWalletApple()">🍎 Apple Wallet</a>
-        <a class="wallet-card" [href]="cuenta.wallet_links.google" target="_blank" rel="noreferrer" (click)="registrarClickWalletGoogle()">Google Wallet</a>
+      <div class="wallet-grid wallet-grid--actions">
+        <button type="button" class="wallet-card wallet-card--alt" (click)="descargarQr()">Descargar QR</button>
+        <button type="button" class="wallet-card wallet-card--alt" (click)="compartirQr()">Compartir QR</button>
       </div>
 
-      <p class="wallet-note">
-        Los wallets requieren certificados del proveedor para emision real de pases.
-      </p>
+      <p *ngIf="mensajeQr" class="wallet-note wallet-note--ok">{{ mensajeQr }}</p>
 
       <a routerLink="/mi-cuenta" class="back-link">← Volver a mis comercios</a>
     </div>

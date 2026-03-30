@@ -30,3 +30,82 @@ textarea {
   outline: 2px solid #0f766e;
   outline-offset: 2px;
 }
+
+/* ── Decoracion lateral en pantallas grandes ─────────────────────────── */
+@media (min-width: 960px) {
+  .layout,
+  .global-shell,
+  .customer-shell,
+  .access-shell {
+    position: relative;
+  }
+
+  /* Blob teal — esquina superior izquierda */
+  .layout::before,
+  .global-shell::before,
+  .customer-shell::before,
+  .access-shell::before {
+    content: '';
+    position: absolute;
+    left: min(3vw, 2.5rem);
+    top: 8%;
+    width: clamp(10rem, 17vw, 20rem);
+    height: clamp(10rem, 17vw, 20rem);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 35% 35%,
+      rgba(15, 118, 110, 0.18) 0%,
+      rgba(15, 118, 110, 0.07) 45%,
+      transparent 72%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Blob amber — esquina inferior derecha */
+  .layout::after,
+  .global-shell::after,
+  .customer-shell::after,
+  .access-shell::after {
+    content: '';
+    position: absolute;
+    right: min(2vw, 2rem);
+    bottom: 8%;
+    width: clamp(11rem, 19vw, 22rem);
+    height: clamp(11rem, 19vw, 22rem);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 65% 65%,
+      rgba(245, 158, 11, 0.16) 0%,
+      rgba(245, 158, 11, 0.06) 45%,
+      transparent 72%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+}
+
+/* Anillo decorativo adicional en pantallas muy anchas (>= 1280px) */
+@media (min-width: 1280px) {
+  .layout::before,
+  .global-shell::before,
+  .customer-shell::before,
+  .access-shell::before {
+    width: clamp(14rem, 18vw, 26rem);
+    height: clamp(14rem, 18vw, 26rem);
+    box-shadow:
+      0 0 0 1.5rem rgba(15, 118, 110, 0.04),
+      0 0 0 3rem rgba(15, 118, 110, 0.025);
+  }
+
+  .layout::after,
+  .global-shell::after,
+  .customer-shell::after,
+  .access-shell::after {
+    width: clamp(16rem, 20vw, 28rem);
+    height: clamp(16rem, 20vw, 28rem);
+    box-shadow:
+      0 0 0 1.5rem rgba(245, 158, 11, 0.04),
+      0 0 0 3rem rgba(245, 158, 11, 0.02);
+  }
+}

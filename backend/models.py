@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import func
 
 from database import Base
@@ -20,6 +20,11 @@ class Comercio(Base):
     descripcion = Column(String(255), nullable=True)
     momento_recomendado = Column(String(20), nullable=True)
     mensaje_contextual = Column(String(160), nullable=True)
+    suscripcion_plan = Column(String(40), nullable=False, default="mensual")
+    suscripcion_estado = Column(String(20), nullable=False, default="activa")
+    suscripcion_monto_mxn = Column(Integer, nullable=False, default=299)
+    suscripcion_proximo_cobro = Column(Date, nullable=True)
+    suscripcion_notas = Column(String(255), nullable=True)
     creado_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

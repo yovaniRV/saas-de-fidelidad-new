@@ -512,9 +512,7 @@ def test_obtener_cuenta_publica_cliente(tmp_path: Path):
     assert body["public_id"] == public_id
     assert body["comercio"]["slug"] == "demo-cafe"
     assert body["telefono_mascarado"].endswith("2233")
-    assert body["qr_value"].endswith(f"demo-cafe/cliente/{public_id}")
-    assert body["wallet_links"]["apple"]
-    assert body["wallet_links"]["google"]
+    assert body["qr_value"].endswith(f"/c/{public_id}")
 
 
 def test_registrar_visita_por_qr(tmp_path: Path):
@@ -692,9 +690,9 @@ def test_resumen_analitico_por_comercio(tmp_path: Path):
     body = resumen.json()
     assert body["hero_clicks"] == 2
     assert body["card_clicks"] == 1
-    assert body["wallet_apple_clicks"] == 1
-    assert body["wallet_google_clicks"] == 1
-    assert body["total_clicks"] == 5
+    assert body["wallet_apple_clicks"] == 0
+    assert body["wallet_google_clicks"] == 0
+    assert body["total_clicks"] == 3
 
 
 def test_resumen_analitico_filtra_por_rango_de_fechas(tmp_path: Path):
@@ -924,13 +922,29 @@ def test_subir_logo_jpg_comercio(tmp_path: Path):
     assert "/static/logos/" in body["logo_url"]
 
 
-def test_subir_logo_no_jpg_falla(tmp_path: Path):
+def test_subir_logo_png_comercio(tmp_path: Path):
     client = _build_test_client(tmp_path)
     headers = _auth_headers(client)
 
     response = client.post(
         "/comercios/configuracion/logo",
-        files={"logo": ("logo.png", b"fake-png-content", "image/png")},
+        files={"logo": ("logo.png", b"\x89PNG\r\n\x1a\ncontenido-png", "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["logo_url"] is not None
+    assert body["logo_url"].endswith(".png")
+
+
+def test_subir_logo_extension_invalida_falla(tmp_path: Path):
+    client = _build_test_client(tmp_path)
+    headers = _auth_headers(client)
+
+    response = client.post(
+        "/comercios/configuracion/logo",
+        files={"logo": ("logo.gif", b"GIF89a", "image/gif")},
         headers=headers,
     )
 

@@ -65,7 +65,10 @@ if _local_ip and _local_ip not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_local_ip)
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://127.0.0.1:4200").split(",")
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:4200,http://127.0.0.1:4200,https://localhost:4200,https://127.0.0.1:4200",
+    ).split(",")
     if origin.strip()
 ]
 REDIS_URL = os.getenv("REDIS_URL")
@@ -102,7 +105,10 @@ app.mount("/static", StaticFiles(directory=str(UPLOAD_DIR.parent)), name="static
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOWED_ORIGINS,
-    allow_origin_regex=r"https?://(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+:\d+",
+    allow_origin_regex=(
+        r"https://.*\.vercel\.app"
+        r"|https?://(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+:\d+"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -381,14 +387,10 @@ def get_comercio_by_slug(db: Session, slug: str) -> models.Comercio:
 
 
 def build_comercio_response(comercio: models.Comercio) -> schemas.ComercioBrandingResponse:
-    logo_url = comercio.logo_url
-    if logo_url and logo_url.startswith("/static/"):
-        logo_url = f"{API_BASE_URL}{logo_url}"
-
     return schemas.ComercioBrandingResponse(
         slug=comercio.slug,
         nombre=comercio.nombre,
-        logo_url=logo_url,
+        logo_url=comercio.logo_url,
         color_primario=comercio.color_primario,
         color_secundario=comercio.color_secundario,
         visitas_objetivo=comercio.visitas_objetivo,
@@ -396,6 +398,17 @@ def build_comercio_response(comercio: models.Comercio) -> schemas.ComercioBrandi
         descripcion=comercio.descripcion,
         momento_recomendado=comercio.momento_recomendado,
         mensaje_contextual=comercio.mensaje_contextual,
+        suscripcion=build_suscripcion_response(comercio),
+    )
+
+
+def build_suscripcion_response(comercio: models.Comercio) -> schemas.SuscripcionComercioResponse:
+    return schemas.SuscripcionComercioResponse(
+        plan=comercio.suscripcion_plan or "mensual",
+        estado=comercio.suscripcion_estado or "activa",
+        monto_mxn=comercio.suscripcion_monto_mxn or 0,
+        proximo_cobro=comercio.suscripcion_proximo_cobro.isoformat() if comercio.suscripcion_proximo_cobro else None,
+        notas=comercio.suscripcion_notas,
     )
 
 
@@ -420,16 +433,8 @@ def mask_phone(phone: str) -> str:
     return f"{hidden_prefix}{visible_suffix}"
 
 
-def build_wallet_links(comercio: models.Comercio, public_id: str) -> schemas.WalletLinks:
-    account_url = f"{PUBLIC_BASE_URL}/comercio/{comercio.slug}/cliente/{public_id}"
-    return schemas.WalletLinks(
-        apple=f"{account_url}?wallet=apple",
-        google=f"{account_url}?wallet=google",
-    )
-
-
 def build_cliente_response(cliente: models.Cliente, comercio: models.Comercio) -> schemas.ClienteCuentaResponse:
-    account_url = f"{PUBLIC_BASE_URL}/comercio/{comercio.slug}/cliente/{cliente.public_id}"
+    account_url = f"{PUBLIC_BASE_URL}/c/{cliente.public_id}"
     return schemas.ClienteCuentaResponse(
         comercio=build_comercio_response(comercio),
         public_id=cliente.public_id,
@@ -439,7 +444,6 @@ def build_cliente_response(cliente: models.Cliente, comercio: models.Comercio) -
         recompensas_total=cliente.recompensas_total,
         account_url=account_url,
         qr_value=account_url,
-        wallet_links=build_wallet_links(comercio, cliente.public_id),
     )
 
 
@@ -635,21 +639,12 @@ def obtener_resumen_analitico_comercio(
         models.AuditoriaAccion.detalle.contains("evento=abrir_cuenta_cliente"),
         models.AuditoriaAccion.detalle.contains("origen=card"),
     ).count()
-    wallet_apple_clicks = base_query.filter(
-        models.AuditoriaAccion.detalle.contains("evento=wallet_click"),
-        models.AuditoriaAccion.detalle.contains("origen=apple_wallet"),
-    ).count()
-    wallet_google_clicks = base_query.filter(
-        models.AuditoriaAccion.detalle.contains("evento=wallet_click"),
-        models.AuditoriaAccion.detalle.contains("origen=google_wallet"),
-    ).count()
-
     return schemas.AnalyticsSummaryResponse(
         hero_clicks=hero_clicks,
         card_clicks=card_clicks,
-        wallet_apple_clicks=wallet_apple_clicks,
-        wallet_google_clicks=wallet_google_clicks,
-        total_clicks=hero_clicks + card_clicks + wallet_apple_clicks + wallet_google_clicks,
+        wallet_apple_clicks=0,
+        wallet_google_clicks=0,
+        total_clicks=hero_clicks + card_clicks,
     )
 
 
@@ -807,6 +802,12 @@ def login(
     comercio = db.query(models.Comercio).filter(models.Comercio.id == cajero.comercio_id).first()
     if not comercio:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Comercio invalido")
+
+    if (comercio.suscripcion_estado or "activa") in {"suspendida", "cancelada"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La suscripcion del comercio esta inactiva. Contacta al administrador.",
+        )
 
     if estado.bloqueado_hasta and estado.bloqueado_hasta > now:
         log_auditoria(
@@ -971,7 +972,47 @@ def listar_comercios_admin(
 ):
     ensure_admin(auth)
     comercios = db.query(models.Comercio).order_by(models.Comercio.nombre.asc()).all()
-    return [schemas.AdminComercioResumenResponse(slug=item.slug, nombre=item.nombre) for item in comercios]
+    return [
+        schemas.AdminComercioResumenResponse(
+            slug=item.slug,
+            nombre=item.nombre,
+            suscripcion=build_suscripcion_response(item),
+        )
+        for item in comercios
+    ]
+
+
+@app.patch("/admin/comercios/{slug}/suscripcion", response_model=schemas.AdminComercioResumenResponse)
+def actualizar_suscripcion_comercio_admin(
+    slug: str,
+    payload: schemas.AdminSuscripcionUpdateRequest,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+    comercio = get_comercio_by_slug(db, slug)
+
+    comercio.suscripcion_plan = payload.plan
+    comercio.suscripcion_estado = payload.estado
+    comercio.suscripcion_monto_mxn = payload.monto_mxn
+    comercio.suscripcion_proximo_cobro = date.fromisoformat(payload.proximo_cobro) if payload.proximo_cobro else None
+    comercio.suscripcion_notas = payload.notas
+
+    log_auditoria(
+        db,
+        str(auth["username"]),
+        "suscripcion_actualizada",
+        f"Comercio {slug} estado={payload.estado} plan={payload.plan} monto={payload.monto_mxn}",
+        comercio.id,
+    )
+    db.commit()
+    db.refresh(comercio)
+    return schemas.AdminComercioResumenResponse(
+        slug=comercio.slug,
+        nombre=comercio.nombre,
+        suscripcion=build_suscripcion_response(comercio),
+    )
 
 
 @app.post("/admin/comercios/{slug}/jefes", response_model=schemas.CajeroResponse)
@@ -1015,7 +1056,11 @@ def listar_personal_por_comercio_admin(
     comercio = get_comercio_by_slug(db, slug)
     personal = db.query(models.Cajero).filter(models.Cajero.comercio_id == comercio.id).order_by(models.Cajero.rol.desc(), models.Cajero.id.asc()).all()
     return schemas.AdminPersonalComercioResponse(
-        comercio=schemas.AdminComercioResumenResponse(slug=comercio.slug, nombre=comercio.nombre),
+        comercio=schemas.AdminComercioResumenResponse(
+            slug=comercio.slug,
+            nombre=comercio.nombre,
+            suscripcion=build_suscripcion_response(comercio),
+        ),
         personal=[build_cajero_response(item) for item in personal],
     )
 
@@ -1118,20 +1163,28 @@ async def subir_logo_comercio(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Comercio invalido")
 
     filename = (logo.filename or "").lower()
-    if not filename.endswith(".jpg") and not filename.endswith(".jpeg"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se permiten logos en formato JPG")
+    allowed_extensions = (".jpg", ".jpeg", ".png")
+    if not filename.endswith(allowed_extensions):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se permiten logos en formato JPG o PNG")
 
-    if logo.content_type not in {"image/jpeg", "image/jpg"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo debe ser image/jpeg")
+    if logo.content_type not in {"image/jpeg", "image/jpg", "image/png"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo debe ser image/jpeg o image/png")
 
     content = await logo.read()
     if len(content) > MAX_LOGO_SIZE_BYTES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El logo supera el limite de 2 MB")
 
-    if len(content) < 4 or not content.startswith(b"\xff\xd8\xff"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo no es un JPG valido")
+    is_jpeg = len(content) >= 4 and content.startswith(b"\xff\xd8\xff")
+    is_png = len(content) >= 8 and content.startswith(b"\x89PNG\r\n\x1a\n")
+    if not (is_jpeg or is_png):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo no es una imagen JPG/PNG valida")
 
-    file_suffix = ".jpg" if filename.endswith(".jpg") else ".jpeg"
+    if filename.endswith(".png"):
+        file_suffix = ".png"
+    elif filename.endswith(".jpeg"):
+        file_suffix = ".jpeg"
+    else:
+        file_suffix = ".jpg"
     safe_filename = f"{comercio.slug}-{uuid4().hex}{file_suffix}"
     destination = UPLOAD_DIR / safe_filename
 

@@ -3,6 +3,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 
 import {
+  AdminSuscripcionUpdateRequest,
   AdminComercioResumenResponse,
   AdminPersonalComercioResponse,
   CajeroResponse,
@@ -25,11 +26,14 @@ export class AdminPanelComponent implements OnInit {
   cargandoLogin = false;
   creandoComercio = false;
   cargandoPersonalAdmin = false;
+  guardandoSuscripcion = false;
   mensajeLogin = '';
   mensajeAdmin = '';
   mensajeAdminTipo: 'success' | 'error' = 'success';
   mensajeComercioNuevo = '';
   mensajeComercioTipo: 'success' | 'error' = 'success';
+  mensajeSuscripcion = '';
+  mensajeSuscripcionTipo: 'success' | 'error' = 'success';
   comerciosAdmin: AdminComercioResumenResponse[] = [];
   personalAdmin: CajeroResponse[] = [];
   comercioJefeSlug = '';
@@ -38,6 +42,13 @@ export class AdminPanelComponent implements OnInit {
     username: '',
     password: '',
     nombre_mostrado: ''
+  };
+  suscripcionForm: AdminSuscripcionUpdateRequest = {
+    plan: 'mensual',
+    estado: 'activa',
+    monto_mxn: 299,
+    proximo_cobro: null,
+    notas: null,
   };
   nuevoComercio: ComercioCreateRequest = {
     slug: '',
@@ -258,6 +269,7 @@ export class AdminPanelComponent implements OnInit {
         if (!this.comercioJefeSlug && comercios.length) {
           this.comercioJefeSlug = comercios[0].slug;
         }
+        this.sincronizarSuscripcionForm(this.comercioJefeSlug);
         if (this.comercioJefeSlug) {
           this.cargarPersonalAdmin(this.comercioJefeSlug);
         }
@@ -276,7 +288,69 @@ export class AdminPanelComponent implements OnInit {
   onComercioJefeChange(event: Event): void {
     const input = event.target as HTMLSelectElement;
     this.comercioJefeSlug = input.value;
+    this.sincronizarSuscripcionForm(this.comercioJefeSlug);
     this.cargarPersonalAdmin(this.comercioJefeSlug);
+  }
+
+  onSuscripcionInput(
+    field: keyof AdminSuscripcionUpdateRequest,
+    event: Event,
+  ): void {
+    const input = event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+    const value = input.value;
+
+    if (field === 'monto_mxn') {
+      this.suscripcionForm.monto_mxn = Math.max(0, Number(value) || 0);
+      return;
+    }
+
+    if (field === 'proximo_cobro') {
+      this.suscripcionForm.proximo_cobro = value.trim() || null;
+      return;
+    }
+
+    if (field === 'notas') {
+      this.suscripcionForm.notas = value.trim() || null;
+      return;
+    }
+
+    if (field === 'plan') {
+      this.suscripcionForm.plan = value as AdminSuscripcionUpdateRequest['plan'];
+      return;
+    }
+
+    if (field === 'estado') {
+      this.suscripcionForm.estado = value as AdminSuscripcionUpdateRequest['estado'];
+    }
+  }
+
+  guardarSuscripcionComercio(): void {
+    if (!this.comercioJefeSlug) {
+      this.mensajeSuscripcion = 'Selecciona un comercio para actualizar su suscripcion.';
+      this.mensajeSuscripcionTipo = 'error';
+      return;
+    }
+
+    this.guardandoSuscripcion = true;
+    this.mensajeSuscripcion = '';
+    this.visitaService.actualizarSuscripcionAdmin(this.comercioJefeSlug, this.suscripcionForm).subscribe({
+      next: (comercioActualizado) => {
+        this.comerciosAdmin = this.comerciosAdmin.map((item) => item.slug === comercioActualizado.slug ? comercioActualizado : item);
+        this.sincronizarSuscripcionForm(comercioActualizado.slug);
+        this.guardandoSuscripcion = false;
+        this.mensajeSuscripcion = `✓ Suscripcion actualizada para ${comercioActualizado.nombre}.`;
+        this.mensajeSuscripcionTipo = 'success';
+      },
+      error: (err) => {
+        if (err?.status === 401) {
+          this.forzarReinicioSesion();
+          return;
+        }
+        this.guardandoSuscripcion = false;
+        this.mensajeSuscripcion = this.extraerMensajeError(err, 'No fue posible actualizar la suscripcion.');
+        this.mensajeSuscripcionTipo = 'error';
+      }
+    });
   }
 
   onNuevoJefeInput(field: 'username' | 'password' | 'nombre_mostrado', event: Event): void {
@@ -441,5 +515,22 @@ export class AdminPanelComponent implements OnInit {
     this.mensajeAdminTipo = 'success';
     this.mensajeComercioNuevo = '';
     this.mensajeComercioTipo = 'success';
+    this.mensajeSuscripcion = '';
+    this.mensajeSuscripcionTipo = 'success';
+  }
+
+  private sincronizarSuscripcionForm(slug: string): void {
+    const comercio = this.comerciosAdmin.find((item) => item.slug === slug);
+    if (!comercio) {
+      return;
+    }
+
+    this.suscripcionForm = {
+      plan: comercio.suscripcion.plan,
+      estado: comercio.suscripcion.estado,
+      monto_mxn: comercio.suscripcion.monto_mxn,
+      proximo_cobro: comercio.suscripcion.proximo_cobro,
+      notas: comercio.suscripcion.notas,
+    };
   }
 }

@@ -38,12 +38,36 @@ def ensure_sqlite_schema() -> None:
                 connection.execute(text("ALTER TABLE comercios ADD COLUMN momento_recomendado VARCHAR(20)"))
             if "mensaje_contextual" not in comercio_columns:
                 connection.execute(text("ALTER TABLE comercios ADD COLUMN mensaje_contextual VARCHAR(160)"))
+            if "suscripcion_plan" not in comercio_columns:
+                connection.execute(text("ALTER TABLE comercios ADD COLUMN suscripcion_plan VARCHAR(40) DEFAULT 'mensual'"))
+                connection.execute(text("UPDATE comercios SET suscripcion_plan = 'mensual' WHERE suscripcion_plan IS NULL OR suscripcion_plan = ''"))
+            if "suscripcion_estado" not in comercio_columns:
+                connection.execute(text("ALTER TABLE comercios ADD COLUMN suscripcion_estado VARCHAR(20) DEFAULT 'activa'"))
+                connection.execute(text("UPDATE comercios SET suscripcion_estado = 'activa' WHERE suscripcion_estado IS NULL OR suscripcion_estado = ''"))
+            if "suscripcion_monto_mxn" not in comercio_columns:
+                connection.execute(text("ALTER TABLE comercios ADD COLUMN suscripcion_monto_mxn INTEGER DEFAULT 299"))
+                connection.execute(text("UPDATE comercios SET suscripcion_monto_mxn = 299 WHERE suscripcion_monto_mxn IS NULL"))
+            if "suscripcion_proximo_cobro" not in comercio_columns:
+                connection.execute(text("ALTER TABLE comercios ADD COLUMN suscripcion_proximo_cobro DATE"))
+            if "suscripcion_notas" not in comercio_columns:
+                connection.execute(text("ALTER TABLE comercios ADD COLUMN suscripcion_notas VARCHAR(255)"))
 
             connection.execute(
                 text(
                     """
-                    INSERT INTO comercios (slug, nombre, color_primario, color_secundario, visitas_objetivo, recompensa_nombre, descripcion)
-                    SELECT :slug, :nombre, '#0f766e', '#f59e0b', 5, 'Bebida gratis', 'Comercio demo para el MVP'
+                    INSERT INTO comercios (
+                        slug,
+                        nombre,
+                        color_primario,
+                        color_secundario,
+                        visitas_objetivo,
+                        recompensa_nombre,
+                        descripcion,
+                        suscripcion_plan,
+                        suscripcion_estado,
+                        suscripcion_monto_mxn
+                    )
+                    SELECT :slug, :nombre, '#0f766e', '#f59e0b', 5, 'Bebida gratis', 'Comercio demo para el MVP', 'mensual', 'activa', 299
                     WHERE NOT EXISTS (SELECT 1 FROM comercios WHERE slug = :slug)
                     """
                 ),

@@ -50,6 +50,15 @@ class ComercioBrandingResponse(BaseModel):
     descripcion: str | None = None
     momento_recomendado: str | None = None
     mensaje_contextual: str | None = None
+    suscripcion: "SuscripcionComercioResponse"
+
+
+class SuscripcionComercioResponse(BaseModel):
+    plan: str
+    estado: str
+    monto_mxn: int
+    proximo_cobro: str | None = None
+    notas: str | None = None
 
 
 class AnalyticsEventRequest(BaseModel):
@@ -174,6 +183,54 @@ class ComercioCreateResponse(BaseModel):
 class AdminComercioResumenResponse(BaseModel):
     slug: str
     nombre: str
+    suscripcion: SuscripcionComercioResponse
+
+
+class AdminSuscripcionUpdateRequest(BaseModel):
+    plan: str = Field(..., min_length=2, max_length=40)
+    estado: str = Field(..., min_length=3, max_length=20)
+    monto_mxn: int = Field(..., ge=0, le=1000000)
+    proximo_cobro: str | None = None
+    notas: str | None = Field(default=None, max_length=255)
+
+    @field_validator("plan")
+    @classmethod
+    def validar_plan(cls, value: str) -> str:
+        normalized = normalize_required(value).lower()
+        allowed = {"mensual", "trimestral", "anual", "personalizado"}
+        if normalized not in allowed:
+            raise ValueError("plan debe ser mensual, trimestral, anual o personalizado")
+        return normalized
+
+    @field_validator("estado")
+    @classmethod
+    def validar_estado(cls, value: str) -> str:
+        normalized = normalize_required(value).lower()
+        allowed = {"prueba", "activa", "vencida", "suspendida", "cancelada"}
+        if normalized not in allowed:
+            raise ValueError("estado debe ser prueba, activa, vencida, suspendida o cancelada")
+        return normalized
+
+    @field_validator("proximo_cobro")
+    @classmethod
+    def validar_proximo_cobro(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        # formato YYYY-MM-DD
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", normalized):
+            raise ValueError("proximo_cobro debe tener formato YYYY-MM-DD")
+        return normalized
+
+    @field_validator("notas")
+    @classmethod
+    def normalizar_notas(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class AdminPersonalComercioResponse(BaseModel):
@@ -309,11 +366,6 @@ class RegistrarVisitaQrRequest(BaseModel):
     public_id: str
 
 
-class WalletLinks(BaseModel):
-    apple: str | None = None
-    google: str | None = None
-
-
 class ClienteCuentaResponse(BaseModel):
     comercio: ComercioBrandingResponse
     public_id: str
@@ -323,7 +375,6 @@ class ClienteCuentaResponse(BaseModel):
     recompensas_total: int
     account_url: str
     qr_value: str
-    wallet_links: WalletLinks
 
 
 class RegistrarVisitaResponse(BaseModel):

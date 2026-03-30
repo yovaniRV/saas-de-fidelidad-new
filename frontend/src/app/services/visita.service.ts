@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 
 import { environment } from '../../environments/environment';
 
@@ -11,9 +11,12 @@ export interface RegistrarVisitaResponse {
   cliente: ClienteCuentaResponse;
 }
 
-export interface WalletLinks {
-  apple: string | null;
-  google: string | null;
+export interface SuscripcionComercio {
+  plan: 'mensual' | 'trimestral' | 'anual' | 'personalizado';
+  estado: 'prueba' | 'activa' | 'vencida' | 'suspendida' | 'cancelada';
+  monto_mxn: number;
+  proximo_cobro: string | null;
+  notas: string | null;
 }
 
 export interface ComercioBrandingResponse {
@@ -27,6 +30,7 @@ export interface ComercioBrandingResponse {
   descripcion: string | null;
   momento_recomendado?: string | null;
   mensaje_contextual?: string | null;
+  suscripcion: SuscripcionComercio;
 }
 
 export interface AnalyticsEventRequest {
@@ -83,6 +87,15 @@ export interface ComercioCreateResponse {
 export interface AdminComercioResumenResponse {
   slug: string;
   nombre: string;
+  suscripcion: SuscripcionComercio;
+}
+
+export interface AdminSuscripcionUpdateRequest {
+  plan: SuscripcionComercio['plan'];
+  estado: SuscripcionComercio['estado'];
+  monto_mxn: number;
+  proximo_cobro: string | null;
+  notas: string | null;
 }
 
 export interface AdminPersonalComercioResponse {
@@ -125,7 +138,6 @@ export interface ClienteCuentaResponse {
   recompensas_total: number;
   account_url: string;
   qr_value: string;
-  wallet_links: WalletLinks;
 }
 
 export interface ClienteMisComerciosResponse {
@@ -154,6 +166,45 @@ export class VisitaService {
 
   constructor(private readonly http: HttpClient) {}
 
+  private normalizarLogoUrl(logoUrl: string | null): string | null {
+    if (!logoUrl) {
+      return null;
+    }
+
+    if (/^https?:\/\//i.test(logoUrl)) {
+      return logoUrl;
+    }
+
+    if (logoUrl.startsWith('/')) {
+      return `${this.baseUrl}${logoUrl}`;
+    }
+
+    return logoUrl;
+  }
+
+  private normalizarComercio(comercio: ComercioBrandingResponse): ComercioBrandingResponse {
+    return {
+      ...comercio,
+      logo_url: this.normalizarLogoUrl(comercio.logo_url),
+    };
+  }
+
+  private normalizarClienteCuenta(cuenta: ClienteCuentaResponse): ClienteCuentaResponse {
+    const comercio = this.normalizarComercio(cuenta.comercio);
+    return {
+      ...cuenta,
+      comercio,
+      objetivo_visitas: comercio.visitas_objetivo,
+    };
+  }
+
+  private normalizarRegistrarVisitaResponse(response: RegistrarVisitaResponse): RegistrarVisitaResponse {
+    return {
+      ...response,
+      cliente: this.normalizarClienteCuenta(response.cliente),
+    };
+  }
+
   private authHeaders(): HttpHeaders | undefined {
     const token = this.obtenerToken();
     return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : undefined;
@@ -167,6 +218,11 @@ export class VisitaService {
       {
         headers: { 'Content-Type': 'application/json' }
       }
+    ).pipe(
+      map((response) => ({
+        ...response,
+        comercio: response.comercio ? this.normalizarComercio(response.comercio) : null,
+      }))
     );
   }
 
@@ -210,21 +266,29 @@ export class VisitaService {
 
   registrarVisita(telefono: string): Observable<RegistrarVisitaResponse> {
     const headers = this.authHeaders();
-    return this.http.post<RegistrarVisitaResponse>(this.apiUrl, { telefono }, { headers });
+    return this.http.post<RegistrarVisitaResponse>(this.apiUrl, { telefono }, { headers }).pipe(
+      map((response) => this.normalizarRegistrarVisitaResponse(response))
+    );
   }
 
   registrarVisitaPorQr(publicId: string): Observable<RegistrarVisitaResponse> {
     const headers = this.authHeaders();
-    return this.http.post<RegistrarVisitaResponse>(this.qrUrl, { public_id: publicId }, { headers });
+    return this.http.post<RegistrarVisitaResponse>(this.qrUrl, { public_id: publicId }, { headers }).pipe(
+      map((response) => this.normalizarRegistrarVisitaResponse(response))
+    );
   }
 
   obtenerComercio(slug: string): Observable<ComercioBrandingResponse> {
-    return this.http.get<ComercioBrandingResponse>(`${this.baseUrl}/comercios/${slug}`);
+    return this.http.get<ComercioBrandingResponse>(`${this.baseUrl}/comercios/${slug}`).pipe(
+      map((response) => this.normalizarComercio(response))
+    );
   }
 
   actualizarComercio(payload: ComercioConfigUpdateRequest): Observable<ComercioBrandingResponse> {
     const headers = this.authHeaders();
-    return this.http.put<ComercioBrandingResponse>(`${this.baseUrl}/comercios/configuracion`, payload, { headers });
+    return this.http.put<ComercioBrandingResponse>(`${this.baseUrl}/comercios/configuracion`, payload, { headers }).pipe(
+      map((response) => this.normalizarComercio(response))
+    );
   }
 
   subirLogoComercio(file: File): Observable<ComercioBrandingResponse> {
@@ -233,21 +297,38 @@ export class VisitaService {
     const formData = new FormData();
     formData.append('logo', file);
 
-    return this.http.post<ComercioBrandingResponse>(`${this.baseUrl}/comercios/configuracion/logo`, formData, { headers });
+    return this.http.post<ComercioBrandingResponse>(`${this.baseUrl}/comercios/configuracion/logo`, formData, { headers }).pipe(
+      map((response) => this.normalizarComercio(response))
+    );
   }
 
   obtenerCuentaCliente(comercioSlug: string, publicId: string): Observable<ClienteCuentaResponse> {
-    return this.http.get<ClienteCuentaResponse>(`${this.baseUrl}/comercios/${comercioSlug}/clientes/${publicId}`);
+    return this.http.get<ClienteCuentaResponse>(`${this.baseUrl}/comercios/${comercioSlug}/clientes/${publicId}`).pipe(
+      map((response) => this.normalizarClienteCuenta(response))
+    );
+  }
+
+  obtenerCuentaClientePorId(publicId: string): Observable<ClienteCuentaResponse> {
+    return this.http.get<ClienteCuentaResponse>(`${this.baseUrl}/clientes/${publicId}`).pipe(
+      map((response) => this.normalizarClienteCuenta(response))
+    );
   }
 
   accederCuentaCliente(comercioSlug: string, telefono: string): Observable<ClienteCuentaResponse> {
     return this.http.post<ClienteCuentaResponse>(`${this.baseUrl}/comercios/${comercioSlug}/acceso-cliente`, {
       telefono
-    });
+    }).pipe(
+      map((response) => this.normalizarClienteCuenta(response))
+    );
   }
 
   obtenerMisComercios(telefono: string): Observable<ClienteMisComerciosResponse> {
-    return this.http.post<ClienteMisComerciosResponse>(`${this.baseUrl}/clientes/mis-comercios`, { telefono });
+    return this.http.post<ClienteMisComerciosResponse>(`${this.baseUrl}/clientes/mis-comercios`, { telefono }).pipe(
+      map((response) => ({
+        ...response,
+        cuentas: response.cuentas.map((cuenta) => this.normalizarClienteCuenta(cuenta)),
+      }))
+    );
   }
 
   registrarEventoAnalitico(payload: AnalyticsEventRequest): Observable<AnalyticsEventResponse> {
@@ -315,4 +396,11 @@ export class VisitaService {
 
     return this.http.patch<CajeroResponse>(`${this.baseUrl}/admin/cajeros/${cajeroId}/estado`, payload, { headers });
   }
+
+  actualizarSuscripcionAdmin(comercioSlug: string, payload: AdminSuscripcionUpdateRequest): Observable<AdminComercioResumenResponse> {
+    const headers = this.authHeaders();
+
+    return this.http.patch<AdminComercioResumenResponse>(`${this.baseUrl}/admin/comercios/${comercioSlug}/suscripcion`, payload, { headers });
+  }
+
 }

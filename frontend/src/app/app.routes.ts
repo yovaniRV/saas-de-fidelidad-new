@@ -41,6 +41,11 @@ export const appRoutes: Routes = [
     canActivate: [bloquearClienteConSesionCajaGuard]
   },
   {
+    path: 'c/:publicId',
+    component: ClienteCuentaComponent,
+    canActivate: [bloquearClienteConSesionCajaGuard]
+  },
+  {
     path: '**',
     redirectTo: 'mi-cuenta'
   }

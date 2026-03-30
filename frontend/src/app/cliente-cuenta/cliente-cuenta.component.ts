@@ -19,6 +19,7 @@ export class ClienteCuentaComponent implements OnInit {
   qrDataUrl = '';
   comercioSlug = '';
   logoFallido = false;
+  mensajeQr = '';
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -28,17 +29,34 @@ export class ClienteCuentaComponent implements OnInit {
   ngOnInit(): void {
     const publicId = this.route.snapshot.paramMap.get('publicId');
     const comercioSlug = this.route.snapshot.paramMap.get('comercioSlug');
-    if (!publicId || !comercioSlug) {
+    if (!publicId) {
       this.error = 'No se encontro la cuenta del cliente.';
       this.cargando = false;
       return;
     }
 
-    this.comercioSlug = comercioSlug;
-    this.visitaService.obtenerCuentaCliente(comercioSlug, publicId).subscribe({
+    const cuenta$ = comercioSlug
+      ? this.visitaService.obtenerCuentaCliente(comercioSlug, publicId)
+      : this.visitaService.obtenerCuentaClientePorId(publicId);
+
+    cuenta$.subscribe({
       next: async (response) => {
-        this.cuenta = response;
         this.logoFallido = false;
+        const slug = response.comercio.slug;
+        this.comercioSlug = slug;
+        this.visitaService.obtenerComercio(slug).subscribe({
+          next: (comercio) => {
+            this.cuenta = {
+              ...response,
+              comercio,
+              objetivo_visitas: comercio.visitas_objetivo,
+            };
+          },
+          error: () => {
+            this.cuenta = response;
+          }
+        });
+
         this.qrDataUrl = await QRCode.toDataURL(response.qr_value, {
           margin: 1,
           width: 320,
@@ -80,37 +98,40 @@ export class ClienteCuentaComponent implements OnInit {
       .join('') || 'LC';
   }
 
-  registrarClickWalletApple(): void {
-    if (!this.cuenta) {
+  descargarQr(): void {
+    if (!this.qrDataUrl || !this.cuenta) {
       return;
     }
 
-    this.visitaService.registrarEventoAnalitico({
-      comercio_slug: this.cuenta.comercio.slug,
-      public_id: this.cuenta.public_id,
-      evento: 'wallet_click',
-      origen: 'apple_wallet',
-    }).subscribe({
-      error: () => {
-        // La navegacion no depende del evento analitico.
-      }
-    });
+    const enlace = document.createElement('a');
+    enlace.href = this.qrDataUrl;
+    enlace.download = `qr-${this.cuenta.comercio.slug}-${this.cuenta.public_id}.png`;
+    enlace.click();
+    this.mensajeQr = 'QR descargado correctamente.';
   }
 
-  registrarClickWalletGoogle(): void {
-    if (!this.cuenta) {
+  async compartirQr(): Promise<void> {
+    if (!this.qrDataUrl || !this.cuenta) {
       return;
     }
 
-    this.visitaService.registrarEventoAnalitico({
-      comercio_slug: this.cuenta.comercio.slug,
-      public_id: this.cuenta.public_id,
-      evento: 'wallet_click',
-      origen: 'google_wallet',
-    }).subscribe({
-      error: () => {
-        // La navegacion no depende del evento analitico.
+    try {
+      const blob = await (await fetch(this.qrDataUrl)).blob();
+      const file = new File([blob], `qr-${this.cuenta.comercio.slug}-${this.cuenta.public_id}.png`, { type: 'image/png' });
+
+      if (navigator.share && (navigator as Navigator & { canShare?: (data: ShareData) => boolean }).canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: 'Mi QR de fidelidad',
+          text: 'Comparte este QR para registrar visitas en caja.',
+          files: [file],
+        });
+        this.mensajeQr = 'QR compartido correctamente.';
+        return;
       }
-    });
+
+      this.descargarQr();
+    } catch {
+      this.mensajeQr = 'No se pudo compartir el QR desde este navegador.';
+    }
   }
 }

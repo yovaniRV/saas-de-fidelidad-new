@@ -72,6 +72,9 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
 
   private qrScanner: Html5Qrcode | null = null;
   private scannerMountPending = false;
+  private qrScanEnProceso = false;
+  private readonly qrCooldownMs = 8000;
+  private readonly qrCooldownPorCliente = new Map<string, number>();
 
   constructor(
     private readonly visitaService: VisitaService,
@@ -253,17 +256,26 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
   }
 
   onConfigInput(field: keyof ComercioConfigUpdateRequest, event: Event): void {
-    const input = event.target as HTMLInputElement | HTMLTextAreaElement;
+    const input = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
     const value = input.value;
 
     if (field === 'visitas_objetivo') {
-      this.comercioForm.visitas_objetivo = Number(value) || 1;
+      const parsed = Number(value) || 1;
+      this.comercioForm.visitas_objetivo = Math.max(1, Math.min(50, parsed));
+      return;
+    }
+
+    if (field === 'logo_url' || field === 'descripcion' || field === 'momento_recomendado' || field === 'mensaje_contextual') {
+      this.comercioForm = {
+        ...this.comercioForm,
+        [field]: value.trim() || null
+      };
       return;
     }
 
     this.comercioForm = {
       ...this.comercioForm,
-      [field]: value || null
+      [field]: value
     };
   }
 
@@ -337,6 +349,7 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
       return;
     }
 
+    this.qrScanEnProceso = false;
     this.detenerEscanerQr();
   }
 
@@ -356,6 +369,21 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
           this.escanerError = 'QR invalido para este sistema.';
           return;
         }
+
+        if (this.qrScanEnProceso) {
+          return;
+        }
+
+        const ahora = Date.now();
+        const ultimoRegistro = this.qrCooldownPorCliente.get(publicId);
+        if (ultimoRegistro && ahora - ultimoRegistro < this.qrCooldownMs) {
+          const restanteSeg = Math.ceil((this.qrCooldownMs - (ahora - ultimoRegistro)) / 1000);
+          this.escanerError = `Espera ${restanteSeg}s antes de volver a escanear este cliente.`;
+          return;
+        }
+
+        this.qrScanEnProceso = true;
+        this.qrCooldownPorCliente.set(publicId, ahora);
         this.detenerEscanerQr();
         this.registrarVisitaDesdeQr(publicId);
       },
@@ -407,10 +435,12 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
     this.visitaService.registrarVisitaPorQr(publicId).subscribe({
       next: (response: RegistrarVisitaResponse) => {
         this.aplicarRespuestaRegistro(response);
+        this.qrScanEnProceso = false;
         this.cambiarModo('qr');
       },
       error: () => {
         this.cargando = false;
+        this.qrScanEnProceso = false;
         this.escanerError = 'No fue posible registrar la visita desde QR.';
         this.scannerMountPending = true;
       }
@@ -418,6 +448,8 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
   }
 
   aplicarRespuestaRegistro(response: RegistrarVisitaResponse): void {
+    this.comercio = response.cliente.comercio;
+    this.sincronizarFormularioComercio(response.cliente.comercio);
     this.ultimoCliente = response.cliente;
     this.esRecompensa = response.estado === 'recompensa';
     this.mensaje = response.mensaje ?? (this.esRecompensa
@@ -539,23 +571,14 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
     return Math.round((this.resumenAnalytics.card_clicks / this.resumenAnalytics.total_clicks) * 100);
   }
 
-  get porcentajeWallet(): number {
-    if (!this.resumenAnalytics?.total_clicks) {
-      return 0;
-    }
-    const walletTotal = this.resumenAnalytics.wallet_apple_clicks + this.resumenAnalytics.wallet_google_clicks;
-    return Math.round((walletTotal / this.resumenAnalytics.total_clicks) * 100);
-  }
-
   get insightPrincipalMetricas(): string {
     if (!this.resumenAnalytics || this.resumenAnalytics.total_clicks === 0) {
-      return 'Todavia no hay clics suficientes. Prueba destacar una oferta en la hero y revisar en unas horas.';
+      return 'Todavia no hay clics suficientes. Prueba destacar el boton de ver detalle y revisar en unas horas.';
     }
 
     const canales = [
       { nombre: 'Hero principal', valor: this.resumenAnalytics.hero_clicks },
       { nombre: 'Cards del listado', valor: this.resumenAnalytics.card_clicks },
-      { nombre: 'Wallets', valor: this.resumenAnalytics.wallet_apple_clicks + this.resumenAnalytics.wallet_google_clicks },
     ].sort((a, b) => b.valor - a.valor);
 
     return `${canales[0].nombre} lidera con ${canales[0].valor} clics en este rango.`;
