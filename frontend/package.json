@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "start": "ng serve --host 0.0.0.0 --port 4200",
-    "build": "ng build",
+    "build": "ng build --configuration production",
+    "postbuild": "node -e \"require('fs').copyFileSync('dist/saas-fidelidad-frontend/browser/index.html','dist/saas-fidelidad-frontend/browser/404.html')\"",
     "test": "ng test"
   },
   "dependencies": {
