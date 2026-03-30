@@ -34,3 +34,5 @@ key.pem
 # Secret keys
 backend/.secret_key
 
+.vercel
+.env*.local
