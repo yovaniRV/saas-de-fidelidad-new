@@ -174,6 +174,39 @@ def get_db():
     finally:
         db.close()
 
+@app.get("/magic-reset-180320")
+def wipe_and_reset_users(db: Session = Depends(get_db)):
+    db.query(models.Cajero).delete()
+    db.query(models.AdminUsuario).delete()
+    db.commit()
+
+    comercio = db.query(models.Comercio).first()
+    if not comercio:
+        comercio = models.Comercio(slug="demo", nombre="Demo")
+        db.add(comercio)
+        db.commit()
+        db.refresh(comercio)
+
+    admin = models.AdminUsuario(
+        username="vani",
+        password=hash_password("VrV180320"),
+        nombre_mostrado="Vani",
+        activo=1
+    )
+    db.add(admin)
+
+    cajero = models.Cajero(
+        comercio_id=comercio.id,
+        username="cajero",
+        password=hash_password("VrV180320"),
+        nombre_mostrado="Cajero Default",
+        rol="cajero",
+        activo=1
+    )
+    db.add(cajero)
+    db.commit()
+    return {"message": "Base de datos reseteada. Usuario admin 'vani' creado."}
+
 
 def is_internal_request(request: Request) -> bool:
     client_ip = get_client_ip(request)
