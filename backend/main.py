@@ -995,7 +995,17 @@ def actualizar_comercio_configuracion(
 
     comercio.nombre = payload.nombre
     previous_logo_url = comercio.logo_url
-    comercio.logo_url = payload.logo_url
+
+    # Normalizar: siempre guardar ruta relativa /static/logos/... en DB
+    # El frontend puede enviar la URL completa (https://...) por normalizarLogoUrl()
+    def _relative(url: str | None) -> str | None:
+        if not url:
+            return url
+        parsed_url = urlparse(url)
+        return parsed_url.path if parsed_url.scheme else url
+
+    normalized_new_logo = _relative(payload.logo_url)
+    comercio.logo_url = normalized_new_logo
     comercio.color_primario = payload.color_primario
     comercio.color_secundario = payload.color_secundario
     comercio.visitas_objetivo = payload.visitas_objetivo
@@ -1003,7 +1013,8 @@ def actualizar_comercio_configuracion(
     comercio.descripcion = payload.descripcion
     comercio.momento_recomendado = payload.momento_recomendado
     comercio.mensaje_contextual = payload.mensaje_contextual
-    if previous_logo_url != comercio.logo_url and payload.logo_url != previous_logo_url:
+    # Comparar rutas relativas para no borrar el logo por diferencia https:// vs /static/
+    if _relative(previous_logo_url) != normalized_new_logo:
         delete_managed_logo_file(previous_logo_url)
     log_auditoria(db, str(auth["username"]), "comercio_actualizado", "Branding y metas actualizadas", comercio.id)
     db.commit()
