@@ -768,11 +768,11 @@ def login(
     db: Session = Depends(get_db),
     _: None = Depends(rate_limit_login),
 ):
-    login_key = payload.username.lower()
+    login_key = payload.username.strip().lower()
     estado = get_estado_login(db, login_key)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    admin = db.query(models.AdminUsuario).filter(models.AdminUsuario.username == payload.username).first()
+    admin = db.query(models.AdminUsuario).filter(models.AdminUsuario.username == login_key).first()
     if admin:
         if not admin.activo:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario desactivado")
@@ -817,14 +817,14 @@ def login(
         log_auditoria(db, payload.username, "login_exitoso", "Inicio de sesion admin correcto")
         db.commit()
 
-        token = create_access_token(payload.username, "admin")
+        token = create_access_token(admin.username, "admin")
         return schemas.LoginResponse(
             access_token=token,
             rol="admin",
             comercio=None,
         )
 
-    cajeros = db.query(models.Cajero).filter(models.Cajero.username == payload.username).all()
+    cajeros = db.query(models.Cajero).filter(models.Cajero.username == login_key).all()
     if not cajeros:
         estado.intentos_fallidos += 1
         detalle = f"Intento fallido {estado.intentos_fallidos}/{MAX_LOGIN_FAILED_ATTEMPTS}"
@@ -915,7 +915,7 @@ def login(
     log_auditoria(db, payload.username, "login_exitoso", "Inicio de sesion correcto", comercio.id)
     db.commit()
 
-    token = create_access_token(payload.username, cajero.rol, comercio.id, comercio.slug)
+    token = create_access_token(cajero.username, cajero.rol, comercio.id, comercio.slug)
     return schemas.LoginResponse(
         access_token=token,
         rol=cajero.rol,
