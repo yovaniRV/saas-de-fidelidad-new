@@ -631,10 +631,22 @@ def rate_limit_admin_actions(
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict:
+    import os as _os
+    logos_dir = UPLOAD_DIR
+    logos_files = []
+    try:
+        logos_files = [f.name for f in logos_dir.iterdir() if f.is_file()]
+    except Exception:
+        logos_files = []
     return {
         "status": "ok",
         "rate_limit_backend": RATE_LIMIT_BACKEND,
+        "uploads_base_dir": str(UPLOADS_BASE_DIR),
+        "upload_dir": str(UPLOAD_DIR),
+        "upload_dir_exists": UPLOAD_DIR.exists(),
+        "logos_count": len(logos_files),
+        "logos": logos_files[:5],
     }
 
 
@@ -1356,7 +1368,7 @@ def cambiar_mi_password(
     if auth.get("role") != "jefe":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo los jefes pueden cambiar su contraseña directamente"
+            detail="Solo los jefes pueden cambiar su contraseï¿½a directamente"
         )
     
     cajero = db.query(models.Cajero).filter(models.Cajero.id == auth["user_id"]).first()
@@ -1366,7 +1378,7 @@ def cambiar_mi_password(
     from security_utils import hash_password
     cajero.password_hash = hash_password(payload.password)
     
-    log_auditoria(db, str(auth["username"]), "password_actualizado", "El jefe ha actualizado su contraseña", int(auth["comercio_id"]))
+    log_auditoria(db, str(auth["username"]), "password_actualizado", "El jefe ha actualizado su contraseï¿½a", int(auth["comercio_id"]))
     db.commit()
     db.refresh(cajero)
     

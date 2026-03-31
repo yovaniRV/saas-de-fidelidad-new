@@ -299,32 +299,7 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
         this.guardandoConfig = false;
         this.mensajeConfig = 'No fue posible guardar la configuracion del comercio.';
       }
-    }
-
-  onNuevaPasswordPropiaInput(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.nuevaPasswordPropia = input.value;
-  }
-
-  cambiarMiPassword(): void {
-    if (!this.nuevaPasswordPropia || this.nuevaPasswordPropia.length < 6) {
-      this.mensajePassword = 'La contraseña debe tener al menos 6 caracteres.';
-      return;
-    }
-    this.guardandoPassword = true;
-    this.mensajePassword = '';
-    this.visitaService.cambiarMiPassword(this.nuevaPasswordPropia).subscribe({
-      next: () => {
-        this.guardandoPassword = false;
-        this.mensajePassword = 'Contraseña actualizada correctamente.';
-        this.nuevaPasswordPropia = '';
-      },
-      error: (err) => {
-        this.guardandoPassword = false;
-        this.mensajePassword = err?.error?.detail ?? 'Error al actualizar contraseña.';
-      }
     });
-  });
   }
 
   onLogoFileSelected(event: Event): void {
@@ -685,6 +660,31 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
       error: (err) => {
         this.guardandoCajero = false;
         this.mensajeCajero = err?.error?.detail ?? 'No fue posible crear el cajero.';
+      }
+    });
+  }
+
+  onNuevaPasswordPropiaInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.nuevaPasswordPropia = input.value;
+  }
+
+  cambiarMiPassword(): void {
+    if (!this.nuevaPasswordPropia || this.nuevaPasswordPropia.length < 6) {
+      this.mensajePassword = 'La contrasena debe tener al menos 6 caracteres.';
+      return;
+    }
+    this.guardandoPassword = true;
+    this.mensajePassword = '';
+    this.visitaService.cambiarMiPassword(this.nuevaPasswordPropia).subscribe({
+      next: () => {
+        this.guardandoPassword = false;
+        this.mensajePassword = 'Contrasena actualizada correctamente.';
+        this.nuevaPasswordPropia = '';
+      },
+      error: (err) => {
+        this.guardandoPassword = false;
+        this.mensajePassword = err?.error?.detail ?? 'Error al actualizar contrasena.';
       }
     });
   }

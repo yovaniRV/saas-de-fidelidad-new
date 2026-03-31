@@ -358,12 +358,12 @@ export class VisitaService {
   crearCajero(payload: CajeroCreateRequest): Observable<CajeroResponse> {
     const headers = this.authHeaders();
 
-    return this.http.post<CajeroResponse>(`${this.baseUrl}
+    return this.http.post<CajeroResponse>(`${this.baseUrl}/cajeros`, payload, { headers });
+  }
 
   cambiarMiPassword(password: string): Observable<CajeroResponse> {
     const headers = this.authHeaders();
     return this.http.put<CajeroResponse>(`${this.baseUrl}/cajeros/me/password`, { password }, { headers });
-  }/cajeros`, payload, { headers });
   }
 
   crearComercio(payload: ComercioCreateRequest): Observable<ComercioCreateResponse> {
@@ -409,9 +409,3 @@ export class VisitaService {
   }
 
 }
-
-
-
-
-
-
