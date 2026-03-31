@@ -263,6 +263,20 @@
         <p *ngIf="mensajeConfig" class="feedback">{{ mensajeConfig }}</p>
       </section>
 
+        <section *ngIf="seccionActiva === 'configuracion' && esJefe" class="config-panel" style="margin-top:20px;">
+          <div class="section-header">
+            <h2>Cambiar mi contrasena de Jefe</h2>
+          </div>
+          <div class="form-group" style="margin-bottom:15px;">
+            <label for="nuevaPasswordPropia" style="display:block;margin-bottom:5px;font-weight:600;color:var(--color-letras);">Nueva Contrasena</label>
+            <input id="nuevaPasswordPropia" type="password" class="text-input" [value]="nuevaPasswordPropia" (input)="onNuevaPasswordPropiaInput($event)" placeholder="Minimo 6 caracteres" />
+          </div>
+          <button type="button" class="primary-btn" [disabled]="guardandoPassword" (click)="cambiarMiPassword()">
+            {{ guardandoPassword ? 'Guardando...' : 'Actualizar contrasena' }}
+          </button>
+          <p *ngIf="mensajePassword" class="feedback">{{ mensajePassword }}</p>
+        </section>
+
       <ng-container *ngIf="seccionActiva === 'registro' && !esAdmin">
         <div class="switcher">
           <button

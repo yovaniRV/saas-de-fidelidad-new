@@ -419,3 +419,11 @@ class AccesoClienteRequest(BaseModel):
 class ClienteMisComerciosResponse(BaseModel):
     telefono_mascarado: str
     cuentas: list[ClienteCuentaResponse]
+
+class CambiarPasswordRequest(BaseModel):
+    password: str = Field(..., min_length=6, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def validar_password_seguro(cls, value: str) -> str:
+        return validate_password_strength(value)

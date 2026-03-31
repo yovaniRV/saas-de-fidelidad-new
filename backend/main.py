@@ -44,7 +44,13 @@ MAX_LOGIN_FAILED_ATTEMPTS = 5
 LOGIN_LOCK_MINUTES = 5
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:4200")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-UPLOAD_DIR = Path(__file__).resolve().parent / "uploads" / "logos"
+UPLOADS_BASE_DIR = Path(os.getenv("UPLOADS_BASE_DIR", str(Path(__file__).resolve().parent / "uploads")))
+UPLOAD_DIR = UPLOADS_BASE_DIR / "logos"
+_MAGIC_RESET_REQUESTED = os.getenv("MAGIC_RESET_ENABLED", "false").strip().lower() == "true"
+_ALLOW_MAGIC_RESET_ON_RAILWAY = os.getenv("ALLOW_MAGIC_RESET_ON_RAILWAY", "false").strip().lower() == "true"
+_IS_RAILWAY_DEPLOYMENT = bool(os.getenv("RAILWAY_ENVIRONMENT"))
+MAGIC_RESET_ENABLED = _MAGIC_RESET_REQUESTED and (not _IS_RAILWAY_DEPLOYMENT or _ALLOW_MAGIC_RESET_ON_RAILWAY)
+MAGIC_RESET_TOKEN = os.getenv("MAGIC_RESET_TOKEN", "").strip()
 MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024
 ALLOWED_HOSTS = [
     host.strip()
@@ -100,7 +106,7 @@ security = HTTPBearer()
 rate_limiter, RATE_LIMIT_BACKEND = build_rate_limiter(REDIS_URL)
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(UPLOAD_DIR.parent)), name="static")
+app.mount("/static", StaticFiles(directory=str(UPLOADS_BASE_DIR)), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -175,7 +181,17 @@ def get_db():
         db.close()
 
 @app.get("/magic-reset-180320")
-def wipe_and_reset_users(db: Session = Depends(get_db)):
+def wipe_and_reset_users(
+    token: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    if not MAGIC_RESET_ENABLED:
+        # Evita que un endpoint destructivo quede activo en producciÃ³n por defecto.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+    if not MAGIC_RESET_TOKEN or token != MAGIC_RESET_TOKEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado")
+
     db.query(models.Cajero).delete()
     db.query(models.AdminUsuario).delete()
     db.commit()
@@ -1329,3 +1345,29 @@ def obtener_cuenta_cliente(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comercio no encontrado")
 
     return build_cliente_response(cliente, comercio)
+
+@app.put("/cajeros/me/password", response_model=schemas.CajeroResponse)
+def cambiar_mi_password(
+    payload: schemas.CambiarPasswordRequest,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_active_user),
+):
+    ensure_jefe_or_admin(auth)
+    if auth.get("role") != "jefe":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los jefes pueden cambiar su contraseña directamente"
+        )
+    
+    cajero = db.query(models.Cajero).filter(models.Cajero.id == auth["user_id"]).first()
+    if not cajero:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cajero no encontrado")
+    
+    from security_utils import hash_password
+    cajero.password_hash = hash_password(payload.password)
+    
+    log_auditoria(db, str(auth["username"]), "password_actualizado", "El jefe ha actualizado su contraseña", int(auth["comercio_id"]))
+    db.commit()
+    db.refresh(cajero)
+    
+    return build_cajero_response(cajero)

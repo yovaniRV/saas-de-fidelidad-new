@@ -42,6 +42,9 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
   cargandoLogin = false;
   guardandoConfig = false;
   cargandoMetricas = false;
+  nuevaPasswordPropia = '';
+  guardandoPassword = false;
+  mensajePassword = '';
   seccionActiva: 'registro' | 'metricas' | 'cajeros' | 'configuracion' = 'registro';
   ultimoCliente: ClienteCuentaResponse | null = null;
   resumenAnalytics: AnalyticsSummaryResponse | null = null;
@@ -296,7 +299,32 @@ export class RegistroVisitaComponent implements AfterViewChecked, OnDestroy, OnI
         this.guardandoConfig = false;
         this.mensajeConfig = 'No fue posible guardar la configuracion del comercio.';
       }
+    }
+
+  onNuevaPasswordPropiaInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.nuevaPasswordPropia = input.value;
+  }
+
+  cambiarMiPassword(): void {
+    if (!this.nuevaPasswordPropia || this.nuevaPasswordPropia.length < 6) {
+      this.mensajePassword = 'La contraseña debe tener al menos 6 caracteres.';
+      return;
+    }
+    this.guardandoPassword = true;
+    this.mensajePassword = '';
+    this.visitaService.cambiarMiPassword(this.nuevaPasswordPropia).subscribe({
+      next: () => {
+        this.guardandoPassword = false;
+        this.mensajePassword = 'Contraseña actualizada correctamente.';
+        this.nuevaPasswordPropia = '';
+      },
+      error: (err) => {
+        this.guardandoPassword = false;
+        this.mensajePassword = err?.error?.detail ?? 'Error al actualizar contraseña.';
+      }
     });
+  });
   }
 
   onLogoFileSelected(event: Event): void {
