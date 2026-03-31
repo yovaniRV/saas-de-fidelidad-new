@@ -248,9 +248,9 @@ def ensure_sqlite_schema() -> None:
                         text("UPDATE admin_usuarios SET password = :password WHERE id = :id"),
                         {"id": admin["id"], "password": hash_password(admin["password"])},
                     )
-                  elif _ADMIN_PASSWORD_EXPLICITLY_SET and admin["username"] == DEFAULT_ADMIN_USERNAME and not verify_password(admin["password"], DEFAULT_ADMIN_PASSWORD):
-                      # Si ADMIN_PASSWORD está configurado explícitamente en el entorno,
-                      # actualizar el hash del admin por defecto para que coincida.
+                elif _ADMIN_PASSWORD_EXPLICITLY_SET and admin["username"] == DEFAULT_ADMIN_USERNAME and not verify_password(admin["password"], DEFAULT_ADMIN_PASSWORD):
+                    # Si ADMIN_PASSWORD está configurado explícitamente en el entorno,
+                    # actualizar el hash del admin por defecto para que coincida.
                     connection.execute(
                         text("UPDATE admin_usuarios SET password = :password WHERE id = :id"),
                         {"id": admin["id"], "password": hash_password(DEFAULT_ADMIN_PASSWORD)},
