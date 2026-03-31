@@ -117,6 +117,15 @@ export interface AdminCambiarEstadoRequest {
   activo: boolean;
 }
 
+export interface AdminDesbloqueoLoginResponse {
+  username: string;
+  desbloqueado: boolean;
+}
+
+export interface AdminDesbloqueoMasivoResponse {
+  desbloqueados: number;
+}
+
 export interface ComercioConfigUpdateRequest {
   nombre: string;
   logo_url: string | null;
@@ -400,6 +409,16 @@ export class VisitaService {
     const headers = this.authHeaders();
 
     return this.http.patch<CajeroResponse>(`${this.baseUrl}/admin/cajeros/${cajeroId}/estado`, payload, { headers });
+  }
+
+  desbloquearLoginAdmin(username: string): Observable<AdminDesbloqueoLoginResponse> {
+    const headers = this.authHeaders();
+    return this.http.post<AdminDesbloqueoLoginResponse>(`${this.baseUrl}/admin/login/unlock/${encodeURIComponent(username)}`, {}, { headers });
+  }
+
+  desbloquearTodosLosLoginsAdmin(): Observable<AdminDesbloqueoMasivoResponse> {
+    const headers = this.authHeaders();
+    return this.http.post<AdminDesbloqueoMasivoResponse>(`${this.baseUrl}/admin/login/unlock-all`, {}, { headers });
   }
 
   actualizarSuscripcionAdmin(comercioSlug: string, payload: AdminSuscripcionUpdateRequest): Observable<AdminComercioResumenResponse> {

@@ -222,6 +222,45 @@
 
       <div class="divider"></div>
 
+      <!-- SECCIÓN: Desbloqueo de login -->
+      <div class="panel-section">
+        <div class="section-title">
+          <span class="section-icon">🔓</span>
+          <div>
+            <h2>Desbloquear cuentas de login</h2>
+            <p>Libera usuarios bloqueados por intentos fallidos.</p>
+          </div>
+        </div>
+
+        <div class="fields-grid">
+          <div class="field-group">
+            <label class="label" for="usernameDesbloqueo">Username a desbloquear</label>
+            <input
+              id="usernameDesbloqueo"
+              class="text-input"
+              [value]="usernameDesbloqueo"
+              (input)="onUsernameDesbloqueoInput($event)"
+              placeholder="Ej: jefe-centro"
+            />
+          </div>
+        </div>
+
+        <div class="staff-actions">
+          <button type="button" class="secondary-btn" [disabled]="desbloqueandoLogins" (click)="desbloquearUsuarioLogin()">
+            Desbloquear usuario
+          </button>
+          <button type="button" class="secondary-btn" [disabled]="desbloqueandoLogins" (click)="desbloquearTodosLosLogins()">
+            Desbloquear todas las cuentas
+          </button>
+        </div>
+
+        <p *ngIf="mensajeDesbloqueo" class="feedback" [class.success]="mensajeDesbloqueoTipo === 'success'" [class.error]="mensajeDesbloqueoTipo === 'error'">
+          {{ mensajeDesbloqueo }}
+        </p>
+      </div>
+
+      <div class="divider"></div>
+
       <!-- SECCIÓN: Personal del comercio -->
       <div class="panel-section">
         <div class="section-title">

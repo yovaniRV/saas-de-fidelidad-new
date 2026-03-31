@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import {
   AdminSuscripcionUpdateRequest,
   AdminComercioResumenResponse,
+  AdminDesbloqueoLoginResponse,
   AdminPersonalComercioResponse,
   CajeroResponse,
   ComercioCreateRequest,
@@ -34,6 +35,10 @@ export class AdminPanelComponent implements OnInit {
   mensajeComercioTipo: 'success' | 'error' = 'success';
   mensajeSuscripcion = '';
   mensajeSuscripcionTipo: 'success' | 'error' = 'success';
+  mensajeDesbloqueo = '';
+  mensajeDesbloqueoTipo: 'success' | 'error' = 'success';
+  desbloqueandoLogins = false;
+  usernameDesbloqueo = '';
   comerciosAdmin: AdminComercioResumenResponse[] = [];
   personalAdmin: CajeroResponse[] = [];
   comercioJefeSlug = '';
@@ -83,6 +88,11 @@ export class AdminPanelComponent implements OnInit {
   onPasswordInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.password = input.value;
+  }
+
+  onUsernameDesbloqueoInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.usernameDesbloqueo = input.value;
   }
 
   iniciarSesion(): void {
@@ -463,6 +473,57 @@ export class AdminPanelComponent implements OnInit {
     });
   }
 
+  desbloquearUsuarioLogin(): void {
+    const username = this.usernameDesbloqueo.trim();
+    if (!username) {
+      this.mensajeDesbloqueo = 'Ingresa un username para desbloquear.';
+      this.mensajeDesbloqueoTipo = 'error';
+      return;
+    }
+
+    this.desbloqueandoLogins = true;
+    this.mensajeDesbloqueo = '';
+    this.visitaService.desbloquearLoginAdmin(username).subscribe({
+      next: (response: AdminDesbloqueoLoginResponse) => {
+        this.desbloqueandoLogins = false;
+        this.mensajeDesbloqueo = response.desbloqueado
+          ? `✓ Usuario ${response.username} desbloqueado.`
+          : `Sin cambios: ${response.username} no estaba bloqueado.`;
+        this.mensajeDesbloqueoTipo = 'success';
+      },
+      error: (err) => {
+        if (err?.status === 401) {
+          this.forzarReinicioSesion();
+          return;
+        }
+        this.desbloqueandoLogins = false;
+        this.mensajeDesbloqueo = this.extraerMensajeError(err, 'No fue posible desbloquear el usuario.');
+        this.mensajeDesbloqueoTipo = 'error';
+      }
+    });
+  }
+
+  desbloquearTodosLosLogins(): void {
+    this.desbloqueandoLogins = true;
+    this.mensajeDesbloqueo = '';
+    this.visitaService.desbloquearTodosLosLoginsAdmin().subscribe({
+      next: (response) => {
+        this.desbloqueandoLogins = false;
+        this.mensajeDesbloqueo = `✓ Cuentas desbloqueadas: ${response.desbloqueados}.`;
+        this.mensajeDesbloqueoTipo = 'success';
+      },
+      error: (err) => {
+        if (err?.status === 401) {
+          this.forzarReinicioSesion();
+          return;
+        }
+        this.desbloqueandoLogins = false;
+        this.mensajeDesbloqueo = this.extraerMensajeError(err, 'No fue posible desbloquear las cuentas.');
+        this.mensajeDesbloqueoTipo = 'error';
+      }
+    });
+  }
+
   etiquetaEstado(personal: CajeroResponse): string {
     return personal.activo ? 'Activo' : 'Desactivado';
   }
@@ -517,6 +578,10 @@ export class AdminPanelComponent implements OnInit {
     this.mensajeComercioTipo = 'success';
     this.mensajeSuscripcion = '';
     this.mensajeSuscripcionTipo = 'success';
+    this.mensajeDesbloqueo = '';
+    this.mensajeDesbloqueoTipo = 'success';
+    this.desbloqueandoLogins = false;
+    this.usernameDesbloqueo = '';
   }
 
   private sincronizarSuscripcionForm(slug: string): void {
