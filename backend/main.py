@@ -1373,7 +1373,7 @@ def obtener_cuenta_cliente(
 def cambiar_mi_password(
     payload: schemas.CambiarPasswordRequest,
     db: Session = Depends(get_db),
-    auth: dict[str, str | int | None] = Depends(get_current_active_user),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
 ):
     ensure_jefe_or_admin(auth)
     if auth.get("role") != "jefe":
