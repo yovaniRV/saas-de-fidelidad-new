@@ -278,6 +278,15 @@ class AdminCambiarEstadoRequest(BaseModel):
     activo: bool
 
 
+class AdminDesbloqueoLoginResponse(BaseModel):
+    username: str
+    desbloqueado: bool
+
+
+class AdminDesbloqueoMasivoResponse(BaseModel):
+    desbloqueados: int
+
+
 class ComercioConfigUpdateRequest(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=120)
     logo_url: str | None = None

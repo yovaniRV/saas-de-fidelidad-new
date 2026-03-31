@@ -428,6 +428,13 @@ def get_estado_login(db: Session, login_key: str) -> models.EstadoLoginCajero:
     return estado
 
 
+def desbloquear_estado_login(estado: models.EstadoLoginCajero) -> bool:
+    estaba_bloqueado = bool(estado.intentos_fallidos or estado.bloqueado_hasta)
+    estado.intentos_fallidos = 0
+    estado.bloqueado_hasta = None
+    return estaba_bloqueado
+
+
 def get_comercio_by_slug(db: Session, slug: str) -> models.Comercio:
     comercio = db.query(models.Comercio).filter(models.Comercio.slug == slug).first()
     if not comercio:
@@ -1186,6 +1193,47 @@ def cambiar_estado_cajero_admin(
     db.commit()
     db.refresh(cajero)
     return build_cajero_response(cajero)
+
+
+@app.post("/admin/login/unlock/{username}", response_model=schemas.AdminDesbloqueoLoginResponse)
+def desbloquear_login_admin(
+    username: str,
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+    login_key = username.strip().lower()
+    if not login_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="username requerido")
+
+    estado = db.query(models.EstadoLoginCajero).filter(models.EstadoLoginCajero.username == login_key).first()
+    if not estado:
+        return schemas.AdminDesbloqueoLoginResponse(username=login_key, desbloqueado=False)
+
+    desbloqueado = desbloquear_estado_login(estado)
+    log_auditoria(db, str(auth["username"]), "login_desbloqueado", f"Usuario {login_key}", None)
+    db.commit()
+    return schemas.AdminDesbloqueoLoginResponse(username=login_key, desbloqueado=desbloqueado)
+
+
+@app.post("/admin/login/unlock-all", response_model=schemas.AdminDesbloqueoMasivoResponse)
+def desbloquear_todos_login_admin(
+    db: Session = Depends(get_db),
+    auth: dict[str, str | int | None] = Depends(get_current_user),
+    _: None = Depends(rate_limit_admin_actions),
+):
+    ensure_admin(auth)
+
+    estados = db.query(models.EstadoLoginCajero).all()
+    desbloqueados = 0
+    for estado in estados:
+        if desbloquear_estado_login(estado):
+            desbloqueados += 1
+
+    log_auditoria(db, str(auth["username"]), "login_desbloqueo_masivo", f"Cuentas desbloqueadas: {desbloqueados}", None)
+    db.commit()
+    return schemas.AdminDesbloqueoMasivoResponse(desbloqueados=desbloqueados)
 
 
 @app.post("/cajeros", response_model=schemas.CajeroResponse)
