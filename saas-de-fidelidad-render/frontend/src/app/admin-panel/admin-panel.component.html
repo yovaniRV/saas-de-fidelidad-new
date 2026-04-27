@@ -1,0 +1,311 @@
+<main class="layout">
+  <section class="shell-card">
+
+    <!-- ── HEADER ─────────────────────────────────────────────────── -->
+    <div class="hero-strip">
+      <div class="hero-content">
+        <span class="eyebrow">Backoffice</span>
+        <h1>Panel Admin</h1>
+        <p class="subtitle">Gestiona comercios y usuarios del sistema.</p>
+      </div>
+      <div class="hero-icon" aria-hidden="true">⚙️</div>
+    </div>
+
+    <!-- ── LOGIN ──────────────────────────────────────────────────── -->
+    <div *ngIf="!autenticado" class="login-block">
+      <div class="form-card">
+        <div class="form-card-header">
+          <span class="form-card-icon">🔐</span>
+          <div>
+            <h2>Acceso de administrador</h2>
+            <p>Solo el administrador del sistema puede entrar aqui.</p>
+          </div>
+        </div>
+
+        <label for="username" class="label">Usuario</label>
+        <input id="username" type="text" [value]="username" (input)="onUsernameInput($event)" class="text-input" placeholder="Ej: admin" autocomplete="username" />
+
+        <label for="password" class="label">Contrasena</label>
+        <input id="password" type="password" [value]="password" (input)="onPasswordInput($event)" class="text-input" placeholder="••••••••" autocomplete="current-password" (keyup.enter)="iniciarSesion()" />
+
+        <button type="button" class="primary-btn" [disabled]="cargandoLogin" (click)="iniciarSesion()">
+          <span *ngIf="!cargandoLogin">Entrar al panel →</span>
+          <span *ngIf="cargandoLogin" class="spinner"></span>
+        </button>
+
+        <p *ngIf="mensajeLogin" class="feedback error">{{ mensajeLogin }}</p>
+      </div>
+    </div>
+
+    <!-- ── PANEL AUTENTICADO ───────────────────────────────────────── -->
+    <div *ngIf="autenticado" class="panel-body">
+
+      <div class="session-row">
+        <div class="session-info">
+          <span class="dot-online"></span>
+          <span>Sesion admin activa</span>
+        </div>
+        <button type="button" class="ghost-btn" (click)="cerrarSesion()">Cerrar sesion</button>
+      </div>
+
+      <!-- SECCIÓN: Crear comercio -->
+      <div class="panel-section">
+        <div class="section-title">
+          <span class="section-icon">🏪</span>
+          <div>
+            <h2>Crear nuevo comercio</h2>
+            <p>El comercio y su jefe de caja se crean al mismo tiempo.</p>
+          </div>
+        </div>
+
+        <div class="fields-grid">
+          <div class="field-group">
+            <label class="label" for="nuevoSlug">Slug único</label>
+            <input id="nuevoSlug" class="text-input" [value]="nuevoComercio.slug" (input)="onNuevoComercioInput('slug', $event)" placeholder="ej: cafe-centro" />
+            <small class="field-help">Solo minusculas, numeros y guion.</small>
+          </div>
+          <div class="field-group">
+            <label class="label" for="nuevoNombre">Nombre visible</label>
+            <input id="nuevoNombre" class="text-input" [value]="nuevoComercio.nombre" (input)="onNuevoComercioInput('nombre', $event)" placeholder="Ej: Café Centro" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="nuevoJefeUsername">Usuario del jefe</label>
+            <input id="nuevoJefeUsername" class="text-input" [value]="nuevoComercio.jefe_username" (input)="onNuevoComercioInput('jefe_username', $event)" placeholder="Ej: jefe-centro" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="nuevoJefePassword">Contrasena del jefe</label>
+            <input id="nuevoJefePassword" type="password" class="text-input" [value]="nuevoComercio.jefe_password" (input)="onNuevoComercioInput('jefe_password', $event)" placeholder="••••••••" />
+            <small class="field-help">Minimo 6 caracteres, con letras y numeros.</small>
+          </div>
+          <div class="field-group field-group--full">
+            <label class="label" for="nuevoJefeNombreMostrado">Nombre visible del jefe (opcional)</label>
+            <input id="nuevoJefeNombreMostrado" class="text-input" [value]="nuevoComercio.jefe_nombre_mostrado || ''" (input)="onNuevoComercioInput('jefe_nombre_mostrado', $event)" placeholder="Ej: Ana Encargada" />
+          </div>
+        </div>
+
+        <div class="fields-grid fields-grid--compact">
+          <div class="field-group">
+            <label class="label" for="nuevoColorPrimario">Color primario</label>
+            <input id="nuevoColorPrimario" type="color" class="color-input" [value]="nuevoComercio.color_primario" (input)="onNuevoComercioInput('color_primario', $event)" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="nuevoColorSecundario">Color secundario</label>
+            <input id="nuevoColorSecundario" type="color" class="color-input" [value]="nuevoComercio.color_secundario" (input)="onNuevoComercioInput('color_secundario', $event)" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="nuevoObjetivo">Meta de visitas</label>
+            <input id="nuevoObjetivo" type="number" min="1" max="50" class="text-input" [value]="nuevoComercio.visitas_objetivo" (input)="onNuevoComercioInput('visitas_objetivo', $event)" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="nuevoRecompensaNombre">Recompensa</label>
+            <input id="nuevoRecompensaNombre" class="text-input" [value]="nuevoComercio.recompensa_nombre" (input)="onNuevoComercioInput('recompensa_nombre', $event)" placeholder="Ej: Croissant gratis" />
+          </div>
+          <div class="field-group field-group--full">
+            <label class="label" for="nuevaDescripcion">Descripcion (opcional)</label>
+            <textarea id="nuevaDescripcion" class="text-input text-area" [value]="nuevoComercio.descripcion || ''" (input)="onNuevoComercioInput('descripcion', $event)" placeholder="Resumen corto del estilo del comercio"></textarea>
+          </div>
+        </div>
+
+        <button type="button" class="primary-btn" [disabled]="creandoComercio" (click)="crearComercioDesdePanel()">
+          <span *ngIf="!creandoComercio">✨ Crear comercio con jefe</span>
+          <span *ngIf="creandoComercio" class="spinner"></span>
+        </button>
+
+        <p *ngIf="mensajeComercioNuevo" class="feedback" [class.success]="mensajeComercioTipo === 'success'" [class.error]="mensajeComercioTipo === 'error'">{{ mensajeComercioNuevo }}</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- SECCIÓN: Suscripcion del comercio -->
+      <div class="panel-section">
+        <div class="section-title">
+          <span class="section-icon">💳</span>
+          <div>
+            <h2>Suscripcion mensual por negocio</h2>
+            <p>Controla estado, monto y proximo cobro del comercio seleccionado.</p>
+          </div>
+        </div>
+
+        <div class="subscription-summary" *ngIf="comercioJefeSlug">
+          <article class="subscription-card" *ngFor="let item of comerciosAdmin" [class.subscription-card--active]="item.slug === comercioJefeSlug">
+            <div class="subscription-card-head">
+              <strong>{{ item.nombre }}</strong>
+              <span class="role-badge" [class.role-jefe]="item.suscripcion.estado === 'activa' || item.suscripcion.estado === 'prueba'" [class.role-cajero]="item.suscripcion.estado !== 'activa' && item.suscripcion.estado !== 'prueba'">
+                {{ item.suscripcion.estado }}
+              </span>
+            </div>
+            <small>
+              Plan: {{ item.suscripcion.plan }} · ${{ item.suscripcion.monto_mxn }} MXN
+              <span *ngIf="item.suscripcion.proximo_cobro">· Cobro: {{ item.suscripcion.proximo_cobro }}</span>
+            </small>
+          </article>
+        </div>
+
+        <div class="fields-grid">
+          <div class="field-group">
+            <label class="label" for="susPlan">Plan</label>
+            <select id="susPlan" class="text-input select-input" [value]="suscripcionForm.plan" (change)="onSuscripcionInput('plan', $event)">
+              <option value="mensual">Mensual</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="anual">Anual</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="label" for="susEstado">Estado</label>
+            <select id="susEstado" class="text-input select-input" [value]="suscripcionForm.estado" (change)="onSuscripcionInput('estado', $event)">
+              <option value="prueba">Prueba</option>
+              <option value="activa">Activa</option>
+              <option value="vencida">Vencida</option>
+              <option value="suspendida">Suspendida</option>
+              <option value="cancelada">Cancelada</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="label" for="susMonto">Monto mensual (MXN)</label>
+            <input id="susMonto" type="number" min="0" class="text-input" [value]="suscripcionForm.monto_mxn" (input)="onSuscripcionInput('monto_mxn', $event)" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="susCobro">Proximo cobro</label>
+            <input id="susCobro" type="date" class="text-input" [value]="suscripcionForm.proximo_cobro || ''" (input)="onSuscripcionInput('proximo_cobro', $event)" />
+          </div>
+          <div class="field-group field-group--full">
+            <label class="label" for="susNotas">Notas (opcional)</label>
+            <textarea id="susNotas" class="text-input text-area" [value]="suscripcionForm.notas || ''" (input)="onSuscripcionInput('notas', $event)" placeholder="Detalle de facturacion, referencia o acuerdo comercial"></textarea>
+          </div>
+        </div>
+
+        <button type="button" class="secondary-btn" [disabled]="guardandoSuscripcion" (click)="guardarSuscripcionComercio()">
+          {{ guardandoSuscripcion ? 'Guardando...' : 'Guardar suscripcion' }}
+        </button>
+
+        <p *ngIf="mensajeSuscripcion" class="feedback" [class.success]="mensajeSuscripcionTipo === 'success'" [class.error]="mensajeSuscripcionTipo === 'error'">{{ mensajeSuscripcion }}</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- SECCIÓN: Agregar jefe a comercio existente -->
+      <div class="panel-section">
+        <div class="section-title">
+          <span class="section-icon">👤</span>
+          <div>
+            <h2>Agregar jefe a comercio</h2>
+            <p>Crea un usuario con rol jefe en un comercio existente.</p>
+          </div>
+        </div>
+
+        <label class="label" for="comercioJefeSlug">Comercio</label>
+        <select id="comercioJefeSlug" class="text-input select-input" [value]="comercioJefeSlug" (change)="onComercioJefeChange($event)">
+          <option value="" disabled>Selecciona un comercio</option>
+          <option *ngFor="let item of comerciosAdmin" [value]="item.slug">{{ item.nombre }} ({{ item.slug }})</option>
+        </select>
+
+        <div class="fields-grid">
+          <div class="field-group">
+            <label class="label" for="jefeUsername">Usuario jefe</label>
+            <input id="jefeUsername" class="text-input" [value]="nuevoJefe.username" (input)="onNuevoJefeInput('username', $event)" placeholder="Ej: jefe2" />
+          </div>
+          <div class="field-group">
+            <label class="label" for="jefePassword">Contrasena</label>
+            <input id="jefePassword" type="password" class="text-input" [value]="nuevoJefe.password" (input)="onNuevoJefeInput('password', $event)" placeholder="••••••••" />
+          </div>
+          <div class="field-group field-group--full">
+            <label class="label" for="jefeNombre">Nombre visible (opcional)</label>
+            <input id="jefeNombre" class="text-input" [value]="nuevoJefe.nombre_mostrado" (input)="onNuevoJefeInput('nombre_mostrado', $event)" placeholder="Ej: Carlos Jefe" />
+          </div>
+        </div>
+
+        <button type="button" class="secondary-btn" (click)="crearJefeDesdeAdmin()">Crear jefe</button>
+
+        <p *ngIf="mensajeAdmin" class="feedback" [class.success]="mensajeAdminTipo === 'success'" [class.error]="mensajeAdminTipo === 'error'">{{ mensajeAdmin }}</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- SECCIÓN: Desbloqueo de login -->
+      <div class="panel-section">
+        <div class="section-title">
+          <span class="section-icon">🔓</span>
+          <div>
+            <h2>Desbloquear cuentas de login</h2>
+            <p>Libera usuarios bloqueados por intentos fallidos.</p>
+          </div>
+        </div>
+
+        <div class="fields-grid">
+          <div class="field-group">
+            <label class="label" for="usernameDesbloqueo">Username a desbloquear</label>
+            <input
+              id="usernameDesbloqueo"
+              class="text-input"
+              [value]="usernameDesbloqueo"
+              (input)="onUsernameDesbloqueoInput($event)"
+              placeholder="Ej: jefe-centro"
+            />
+          </div>
+        </div>
+
+        <div class="staff-actions">
+          <button type="button" class="secondary-btn" [disabled]="desbloqueandoLogins" (click)="desbloquearUsuarioLogin()">
+            Desbloquear usuario
+          </button>
+          <button type="button" class="secondary-btn" [disabled]="desbloqueandoLogins" (click)="desbloquearTodosLosLogins()">
+            Desbloquear todas las cuentas
+          </button>
+        </div>
+
+        <p *ngIf="mensajeDesbloqueo" class="feedback" [class.success]="mensajeDesbloqueoTipo === 'success'" [class.error]="mensajeDesbloqueoTipo === 'error'">
+          {{ mensajeDesbloqueo }}
+        </p>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- SECCIÓN: Personal del comercio -->
+      <div class="panel-section">
+        <div class="section-title">
+          <span class="section-icon">👥</span>
+          <div>
+            <h2>Personal del comercio</h2>
+            <p *ngIf="comercioPersonalNombre">Gestionando <strong>{{ comercioPersonalNombre }}</strong>.</p>
+            <p *ngIf="!comercioPersonalNombre">Selecciona un comercio arriba para gestionar su personal.</p>
+          </div>
+        </div>
+
+        <p *ngIf="cargandoPersonalAdmin" class="loading-text">Cargando personal...</p>
+
+        <div class="staff-list" *ngIf="!cargandoPersonalAdmin && personalAdmin.length">
+          <article class="staff-item" *ngFor="let personal of personalAdmin">
+            <div class="staff-avatar" [class.avatar-jefe]="personal.rol === 'jefe'" aria-hidden="true">
+              {{ (personal.nombre_mostrado || personal.username).charAt(0).toUpperCase() }}
+            </div>
+            <div class="staff-info">
+              <strong>{{ personal.nombre_mostrado || personal.username }}</strong>
+              <span class="staff-meta">
+                <code>{{ personal.username }}</code>
+                <span class="role-badge" [class.role-jefe]="personal.rol === 'jefe'" [class.role-cajero]="personal.rol === 'cajero'">{{ personal.rol }}</span>
+              </span>
+              <span class="status-pill" [class.active]="personal.activo" [class.inactive]="!personal.activo">
+                {{ personal.activo ? '● Activo' : '○ Inactivo' }}
+              </span>
+            </div>
+            <div class="staff-actions">
+              <button type="button" class="action-btn promote" (click)="promoverODegradar(personal)">
+                {{ personal.rol === 'jefe' ? '↓ Bajar a cajero' : '↑ Subir a jefe' }}
+              </button>
+              <button type="button" class="action-btn" [class.deactivate]="personal.activo" [class.activate]="!personal.activo" (click)="toggleActivo(personal)">
+                {{ personal.activo ? 'Desactivar' : 'Activar' }}
+              </button>
+            </div>
+          </article>
+        </div>
+
+        <div class="empty-staff" *ngIf="!cargandoPersonalAdmin && !personalAdmin.length && comercioJefeSlug">
+          <span>😶</span>
+          <p>No hay personal registrado en este comercio.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>

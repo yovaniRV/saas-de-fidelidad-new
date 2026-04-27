@@ -1,0 +1,38 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Databases and local runtime state
+*.db
+*.sqlite
+backend/loyalty.db
+backend/uploads/
+
+# Node/Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE/OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# SSL certificates (local dev only)
+cert.pem
+key.pem
+*.pem
+
+# Secret keys
+backend/.secret_key
+
+.vercel
+.env*.local

@@ -1,0 +1,193 @@
+<main class="global-shell">
+  <section class="global-card">
+    <div class="card-header">
+      <span class="eyebrow">Mi fidelidad</span>
+      <h1>Todos mis comercios</h1>
+      <p class="subtitle">Ingresa tu telefono y ve todas tus tarjetas de fidelidad en un solo lugar.</p>
+
+      <label for="telefono" class="label">Telefono</label>
+      <input
+        id="telefono"
+        type="tel"
+        inputmode="numeric"
+        maxlength="10"
+        [value]="telefono"
+        (input)="onTelefonoInput($event)"
+        class="phone-input"
+        placeholder="Ej: 0987654321"
+        (keyup.enter)="buscarComercios()"
+      />
+
+      <button type="button" class="primary-btn" [disabled]="cargando || telefono.length !== 10" (click)="buscarComercios()">
+        {{ cargando ? 'Buscando...' : 'Buscar mis cuentas' }}
+      </button>
+
+      <p *ngIf="mensaje" class="feedback">{{ mensaje }}</p>
+    </div>
+
+    <div *ngIf="data" class="list-block">
+      <p class="phone-mask">Telefono: {{ data.telefono_mascarado }}</p>
+
+      <div class="stats-grid">
+        <article class="stat-card">
+          <span>Comercios activos</span>
+          <strong>{{ data.cuentas.length }}</strong>
+        </article>
+        <article class="stat-card">
+          <span>Visitas acumuladas</span>
+          <strong>{{ totalVisitas }}</strong>
+        </article>
+        <article class="stat-card">
+          <span>Recompensas ganadas</span>
+          <strong>{{ totalRecompensas }}</strong>
+        </article>
+      </div>
+
+      <section class="empty-state" *ngIf="!data.cuentas.length">
+        <h2>Tu cuenta ya esta lista</h2>
+        <p>Aun no tienes tarjetas activas porque todavia no has ingresado a un comercio con este numero.</p>
+        <p>Cuando entres a un comercio participante con tu telefono, tu tarjeta se creara al instante y aparecera aqui.</p>
+      </section>
+
+      <div class="filters-grid" *ngIf="data.cuentas.length">
+        <label class="filter-control">
+          <span>Buscar comercio</span>
+          <input
+            type="text"
+            [value]="filtroComercio"
+            (input)="actualizarFiltro($any($event.target).value)"
+            placeholder="Nombre o slug"
+          />
+        </label>
+
+        <label class="filter-control">
+          <span>Ordenar por</span>
+          <select [value]="orden" (change)="actualizarOrden($any($event.target).value)">
+            <option value="progreso">Mayor progreso</option>
+            <option value="recompensas">Mas recompensas</option>
+            <option value="nombre">Nombre (A-Z)</option>
+          </select>
+        </label>
+
+        <label class="toggle-control">
+          <input type="checkbox" [checked]="soloPendientes" (change)="actualizarSoloPendientes($any($event.target).checked)" />
+          <span>Solo metas pendientes</span>
+        </label>
+      </div>
+
+      <p class="empty-filter" *ngIf="!cuentasFiltradas.length">No hay comercios que coincidan con tu filtro actual.</p>
+
+      <section
+        class="hero-priority"
+        *ngIf="cuentaHero"
+        [style.--brand-primary]="cuentaHero.comercio.color_primario"
+        [style.--brand-secondary]="cuentaHero.comercio.color_secundario"
+      >
+        <div class="hero-copy">
+          <span class="hero-chip">Objetivo caliente</span>
+          <h2>{{ cuentaHero.comercio.nombre }}</h2>
+          <p>{{ badgePrioridad(cuentaHero) }}. {{ cuentaHero.comercio.recompensa_nombre }} al completar {{ cuentaHero.objetivo_visitas }} visitas.</p>
+          <strong class="hero-cta-copy">{{ ctaHero(cuentaHero) }}</strong>
+          <p class="hero-recommendation">{{ recomendacionHero(cuentaHero) }}</p>
+
+          <div class="hero-stats">
+            <div>
+              <span>Avance</span>
+              <strong>{{ cuentaHero.visitas_actuales }}/{{ cuentaHero.objetivo_visitas }}</strong>
+            </div>
+            <div>
+              <span>Recompensas</span>
+              <strong>{{ cuentaHero.recompensas_total }}</strong>
+            </div>
+          </div>
+
+          <div class="hero-progress">
+            <div class="hero-progress-fill" [style.width.%]="progreso(cuentaHero.visitas_actuales, cuentaHero.objetivo_visitas)"></div>
+          </div>
+        </div>
+
+        <a class="hero-link" [routerLink]="['/c', cuentaHero.public_id]" (click)="registrarClickHero(cuentaHero)">Abrir cuenta prioritaria</a>
+      </section>
+
+      <p class="hero-note" *ngIf="cuentaHero && cuentasListado.length">La cuenta destacada se separa del listado para evitar repetir el mismo comercio dos veces.</p>
+
+      <section class="priority-strip" *ngIf="cuentasPrioritariasSecundarias.length">
+        <h2>Prioridad de hoy</h2>
+        <div class="priority-list">
+          <article
+            *ngFor="let cuenta of cuentasPrioritariasSecundarias; trackBy: trackByCuenta"
+            class="priority-item"
+            [style.--brand-primary]="cuenta.comercio.color_primario"
+            [style.--brand-secondary]="cuenta.comercio.color_secundario"
+          >
+            <span class="priority-badge" [ngClass]="claseBadgePrioridad(cuenta)">{{ badgePrioridad(cuenta) }}</span>
+            <strong>{{ cuenta.comercio.nombre }}</strong>
+          </article>
+        </div>
+      </section>
+
+      <article
+        *ngFor="let cuenta of cuentasPaginadas; trackBy: trackByCuenta"
+        class="commerce-card"
+        [class.is-new]="esCuentaNueva(cuenta.public_id)"
+        [style.--brand-primary]="cuenta.comercio.color_primario"
+        [style.--brand-secondary]="cuenta.comercio.color_secundario"
+      >
+        <div class="commerce-head">
+          <div>
+            <img
+              *ngIf="mostrarLogo(cuenta.public_id, cuenta.comercio.logo_url)"
+              [src]="cuenta.comercio.logo_url"
+              class="brand-logo"
+              alt="Logo del comercio"
+              loading="lazy"
+              (error)="marcarLogoError(cuenta.public_id)"
+            />
+            <div *ngIf="!mostrarLogo(cuenta.public_id, cuenta.comercio.logo_url)" class="brand-fallback" aria-hidden="true">
+              {{ inicialesComercio(cuenta.comercio.nombre) }}
+            </div>
+            <h3>{{ cuenta.comercio.nombre }}</h3>
+            <p>{{ cuenta.comercio.recompensa_nombre }}</p>
+          </div>
+          <span class="open">{{ cuenta.comercio.slug }}</span>
+        </div>
+
+        <div class="progress-meta">
+          <strong>{{ cuenta.visitas_actuales }}/{{ cuenta.objetivo_visitas }}</strong>
+          <span>{{ cuenta.recompensas_total }} recompensas</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="progreso(cuenta.visitas_actuales, cuenta.objetivo_visitas)"></div>
+        </div>
+        <p class="goal-text">{{ estadoMeta(cuenta) }}</p>
+
+        <div class="qr-row">
+          <ng-container *ngIf="tieneQr(cuenta.public_id); else qrPendiente">
+            <img [src]="qrPorCuenta[cuenta.public_id]" class="qr-image" alt="QR del comercio" />
+          </ng-container>
+          <ng-template #qrPendiente>
+            <div class="qr-image qr-loading">Generando QR...</div>
+          </ng-template>
+          <div class="qr-actions">
+            <a class="wallet-btn secondary" [routerLink]="['/c', cuenta.public_id]" (click)="registrarClickCard(cuenta)">Ver detalle</a>
+          </div>
+        </div>
+      </article>
+
+      <div class="pagination" *ngIf="cuentasListado.length > pasoCarga">
+        <p class="pagination-meta">Mostrando {{ resumenVisible }} comercios</p>
+        <div #loadMoreSentinel class="load-sentinel" *ngIf="quedanPorMostrar > 0" aria-hidden="true"></div>
+        <p class="auto-load-note" *ngIf="quedanPorMostrar > 0 && !cargandoMas">Seguimos cargando mas comercios al hacer scroll.</p>
+        <p class="auto-load-note" *ngIf="cargandoMas">Cargando siguientes comercios...</p>
+        <div class="pagination-actions">
+          <button type="button" class="page-btn" *ngIf="quedanPorMostrar > 0" (click)="cargarMas()">
+            Cargar {{ quedanPorMostrar > pasoCarga ? pasoCarga : quedanPorMostrar }} mas
+          </button>
+          <button type="button" class="page-btn secondary" *ngIf="cuentasPaginadas.length > pasoCarga" (click)="mostrarMenos()">
+            Mostrar menos
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>

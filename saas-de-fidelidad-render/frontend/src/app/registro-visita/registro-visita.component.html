@@ -1,0 +1,350 @@
+<main class="layout">
+  <section
+    class="card shell-card"
+    [style.--accent]="comercio?.color_primario || '#0f766e'"
+    [style.--accent-2]="comercio?.color_secundario || '#14b8a6'"
+  >
+    <div class="hero-strip">
+      <div>
+        <span class="eyebrow">Caja express</span>
+        <img
+          *ngIf="mostrarLogo(comercio?.logo_url, 'hero')"
+          [src]="comercio?.logo_url || ''"
+          alt="Logo del comercio"
+          class="brand-logo"
+          loading="lazy"
+          (error)="marcarLogoError('hero')"
+        />
+        <div *ngIf="!mostrarLogo(comercio?.logo_url, 'hero')" class="brand-fallback" aria-hidden="true">
+          {{ inicialesComercio(comercio?.nombre) }}
+        </div>
+        <h1>{{ comercio?.nombre || 'Fidelidad que se siente premium' }}</h1>
+        <p class="subtitle">
+          {{ comercio?.descripcion || 'Registra por telefono o escaneando el QR del cliente en segundos.' }}
+        </p>
+      </div>
+      <div class="hero-stat">
+        <strong>{{ comercio?.visitas_objetivo || 5 }}</strong>
+        <span>{{ comercio?.recompensa_nombre || 'visitas por recompensa' }}</span>
+      </div>
+    </div>
+
+    <div *ngIf="!autenticado" class="login-block">
+      <div class="section-header">
+        <h2>Ingreso de cajero</h2>
+        <p>Protegido con bloqueo temporal por intentos fallidos.</p>
+      </div>
+
+      <label for="username" class="label">Usuario</label>
+      <input
+        id="username"
+        type="text"
+        [value]="username"
+        (input)="onUsernameInput($event)"
+        class="text-input"
+        placeholder="Usuario"
+      />
+
+      <label for="password" class="label">Contrasena</label>
+      <input
+        id="password"
+        type="password"
+        [value]="password"
+        (input)="onPasswordInput($event)"
+        class="text-input"
+        placeholder="Contrasena"
+      />
+
+      <button type="button" class="primary-btn" [disabled]="cargandoLogin" (click)="iniciarSesion()">
+        {{ cargandoLogin ? 'Ingresando...' : 'Iniciar Sesion' }}
+      </button>
+
+      <p *ngIf="mensajeLogin" class="feedback warning">{{ mensajeLogin }}</p>
+
+      <p class="back-link customer-link">Portal exclusivo para cajeros.</p>
+    </div>
+
+    <div *ngIf="autenticado" class="registro-block">
+      <div class="session-row">
+        <span class="session-tag">Sesion activa</span>
+        <div class="session-actions">
+          <button type="button" class="link-btn" (click)="cerrarSesion()">Cerrar sesion</button>
+        </div>
+      </div>
+
+      <nav class="top-menu" aria-label="Secciones de administracion">
+        <button *ngIf="!esAdmin" type="button" class="top-menu-btn" [class.active]="seccionActiva === 'registro'" (click)="cambiarSeccion('registro')">Registro</button>
+        <button *ngIf="!esAdmin" type="button" class="top-menu-btn" [class.active]="seccionActiva === 'metricas'" (click)="cambiarSeccion('metricas')">Metricas</button>
+        <button *ngIf="esJefe" type="button" class="top-menu-btn" [class.active]="seccionActiva === 'cajeros'" (click)="cambiarSeccion('cajeros')">Cajeros</button>
+        <button *ngIf="puedePersonalizarComercio" type="button" class="top-menu-btn" [class.active]="seccionActiva === 'configuracion'" (click)="cambiarSeccion('configuracion')">Configuracion</button>
+      </nav>
+
+      <section class="metrics-panel" *ngIf="seccionActiva === 'metricas'">
+        <div class="section-header">
+          <h2>Metricas de conversion</h2>
+          <p>Comparativa de intencion entre hero y cards del listado.</p>
+        </div>
+
+        <div class="preset-row">
+          <button type="button" class="preset-btn" [class.active]="presetRango === '7d'" (click)="aplicarPresetRango('7d')">7 dias</button>
+          <button type="button" class="preset-btn" [class.active]="presetRango === '30d'" (click)="aplicarPresetRango('30d')">30 dias</button>
+          <button type="button" class="preset-btn" [class.active]="presetRango === '90d'" (click)="aplicarPresetRango('90d')">90 dias</button>
+        </div>
+
+        <div class="metrics-filters">
+          <label class="label" for="analyticsDesde">Desde</label>
+          <input id="analyticsDesde" type="date" class="text-input" [value]="analyticsDesde" (input)="onAnalyticsDesdeInput($event)" />
+
+          <label class="label" for="analyticsHasta">Hasta</label>
+          <input id="analyticsHasta" type="date" class="text-input" [value]="analyticsHasta" (input)="onAnalyticsHastaInput($event)" />
+
+          <div class="metrics-actions">
+            <button type="button" class="mode-btn" (click)="aplicarFiltroMetricas()">Aplicar rango</button>
+            <button type="button" class="mode-btn" (click)="limpiarFiltroMetricas()">Ultimos 30 dias</button>
+          </div>
+        </div>
+
+        <p *ngIf="cargandoMetricas" class="metrics-loading">Actualizando metricas...</p>
+
+        <p class="metrics-insight" *ngIf="!cargandoMetricas">{{ insightPrincipalMetricas }}</p>
+
+        <div class="metrics-grid" *ngIf="resumenAnalytics && !cargandoMetricas">
+          <article class="metric-item">
+            <span>Hero</span>
+            <strong>{{ resumenAnalytics.hero_clicks }}</strong>
+          </article>
+          <article class="metric-item">
+            <span>Cards</span>
+            <strong>{{ resumenAnalytics.card_clicks }}</strong>
+          </article>
+          <article class="metric-item total">
+            <span>Total</span>
+            <strong>{{ resumenAnalytics.total_clicks }}</strong>
+          </article>
+        </div>
+
+        <div class="comparison-grid" *ngIf="resumenAnalytics && !cargandoMetricas">
+          <article class="comparison-item">
+            <div class="comparison-head">
+              <span>Hero</span>
+              <strong>{{ porcentajeHero }}%</strong>
+            </div>
+            <div class="comparison-bar">
+              <div class="comparison-fill hero" [style.width.%]="porcentajeHero"></div>
+            </div>
+          </article>
+
+          <article class="comparison-item">
+            <div class="comparison-head">
+              <span>Cards</span>
+              <strong>{{ porcentajeCard }}%</strong>
+            </div>
+            <div class="comparison-bar">
+              <div class="comparison-fill card" [style.width.%]="porcentajeCard"></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="cashier-panel" *ngIf="seccionActiva === 'cajeros' && esJefe">
+        <div class="section-header">
+          <h2>Gestion de cajeros</h2>
+          <p>Da de alta nuevos usuarios del local para operar caja.</p>
+        </div>
+
+        <div class="cashier-form-grid">
+          <label class="label" for="nuevoCajeroUsuario">Usuario</label>
+          <input
+            id="nuevoCajeroUsuario"
+            class="text-input"
+            [value]="nuevoCajero.username"
+            (input)="onNuevoCajeroInput('username', $event)"
+            placeholder="Ej: caja-noche"
+          />
+
+          <label class="label" for="nuevoCajeroPassword">Contrasena</label>
+          <input
+            id="nuevoCajeroPassword"
+            type="password"
+            class="text-input"
+            [value]="nuevoCajero.password"
+            (input)="onNuevoCajeroInput('password', $event)"
+            placeholder="Minimo recomendado 8 caracteres"
+          />
+
+          <label class="label" for="nuevoCajeroNombre">Nombre mostrado (opcional)</label>
+          <input
+            id="nuevoCajeroNombre"
+            class="text-input"
+            [value]="nuevoCajero.nombre_mostrado"
+            (input)="onNuevoCajeroInput('nombre_mostrado', $event)"
+            placeholder="Ej: Caja Noche"
+          />
+
+          <button type="button" class="primary-btn" [disabled]="guardandoCajero" (click)="crearNuevoCajero()">
+            {{ guardandoCajero ? 'Creando...' : 'Crear cajero' }}
+          </button>
+        </div>
+
+        <p *ngIf="mensajeCajero" class="feedback">{{ mensajeCajero }}</p>
+        <p *ngIf="cargandoCajeros" class="metrics-loading">Cargando cajeros...</p>
+
+        <div class="cashier-list" *ngIf="!cargandoCajeros && cajeros.length">
+          <article class="cashier-item" *ngFor="let cajero of cajeros">
+            <strong>{{ cajero.nombre_mostrado || cajero.username }}</strong>
+            <span>{{ cajero.username }}</span>
+          </article>
+        </div>
+      </section>
+
+      <section *ngIf="seccionActiva === 'configuracion' && puedePersonalizarComercio" class="config-panel">
+        <div class="section-header">
+          <h2>Configuracion del comercio</h2>
+          <p>Logo, colores, meta de visitas y nombre de recompensa.</p>
+        </div>
+
+        <label class="label" for="nombreComercio">Nombre</label>
+        <input id="nombreComercio" class="text-input" [value]="comercioForm.nombre" (input)="onConfigInput('nombre', $event)" />
+
+        <label class="label" for="logoUrl">Logo URL HTTPS opcional</label>
+        <input id="logoUrl" class="text-input" [value]="comercioForm.logo_url || ''" (input)="onConfigInput('logo_url', $event)" placeholder="Preferible usar el upload JPG del servidor" />
+
+        <label class="label" for="logoFile">Subir logo JPG</label>
+        <input id="logoFile" type="file" accept=".jpg,.jpeg,image/jpeg" class="text-input file-input" (change)="onLogoFileSelected($event)" />
+
+        <img
+          *ngIf="mostrarLogo(comercio?.logo_url, 'preview')"
+          [src]="comercio?.logo_url || ''"
+          alt="Preview del logo"
+          class="logo-preview"
+          loading="lazy"
+          (error)="marcarLogoError('preview')"
+        />
+        <div *ngIf="!mostrarLogo(comercio?.logo_url, 'preview')" class="logo-preview logo-fallback" aria-hidden="true">
+          {{ inicialesComercio(comercioForm.nombre) }}
+        </div>
+
+        <label class="label" for="descripcion">Descripcion</label>
+        <textarea id="descripcion" class="text-input text-area" [value]="comercioForm.descripcion || ''" (input)="onConfigInput('descripcion', $event)"></textarea>
+
+        <label class="label" for="momentoRecomendado">Momento recomendado</label>
+        <select id="momentoRecomendado" class="text-input" [value]="comercioForm.momento_recomendado || ''" (change)="onConfigInput('momento_recomendado', $event)">
+          <option value="">Automatico por horario</option>
+          <option value="desayuno">Desayuno</option>
+          <option value="almuerzo">Almuerzo</option>
+          <option value="merienda">Merienda</option>
+          <option value="cena">Cena</option>
+        </select>
+
+        <label class="label" for="mensajeContextual">Mensaje contextual (opcional)</label>
+        <textarea id="mensajeContextual" class="text-input text-area" [value]="comercioForm.mensaje_contextual || ''" (input)="onConfigInput('mensaje_contextual', $event)"></textarea>
+
+        <div class="color-grid">
+          <div>
+            <label class="label" for="colorPrimario">Color primario</label>
+            <input id="colorPrimario" type="color" class="color-input" [value]="comercioForm.color_primario" (input)="onConfigInput('color_primario', $event)" />
+          </div>
+          <div>
+            <label class="label" for="colorSecundario">Color secundario</label>
+            <input id="colorSecundario" type="color" class="color-input" [value]="comercioForm.color_secundario" (input)="onConfigInput('color_secundario', $event)" />
+          </div>
+        </div>
+
+        <label class="label" for="metaVisitas">Meta de visitas</label>
+        <input id="metaVisitas" type="number" min="1" max="50" class="text-input" [value]="comercioForm.visitas_objetivo" (input)="onConfigInput('visitas_objetivo', $event)" />
+
+        <label class="label" for="recompensaNombre">Nombre de la recompensa</label>
+        <input id="recompensaNombre" class="text-input" [value]="comercioForm.recompensa_nombre" (input)="onConfigInput('recompensa_nombre', $event)" />
+
+        <button type="button" class="primary-btn" [disabled]="guardandoConfig" (click)="guardarConfiguracionComercio()">
+          {{ guardandoConfig ? 'Guardando...' : 'Guardar configuracion' }}
+        </button>
+
+        <p *ngIf="mensajeConfig" class="feedback">{{ mensajeConfig }}</p>
+      </section>
+
+        <section *ngIf="seccionActiva === 'configuracion' && esJefe" class="config-panel" style="margin-top:20px;">
+          <div class="section-header">
+            <h2>Cambiar mi contrasena de Jefe</h2>
+          </div>
+          <div class="form-group" style="margin-bottom:15px;">
+            <label for="nuevaPasswordPropia" style="display:block;margin-bottom:5px;font-weight:600;color:var(--color-letras);">Nueva Contrasena</label>
+            <input id="nuevaPasswordPropia" type="password" class="text-input" [value]="nuevaPasswordPropia" (input)="onNuevaPasswordPropiaInput($event)" placeholder="Minimo 6 caracteres" />
+          </div>
+          <button type="button" class="primary-btn" [disabled]="guardandoPassword" (click)="cambiarMiPassword()">
+            {{ guardandoPassword ? 'Guardando...' : 'Actualizar contrasena' }}
+          </button>
+          <p *ngIf="mensajePassword" class="feedback">{{ mensajePassword }}</p>
+        </section>
+
+      <ng-container *ngIf="seccionActiva === 'registro' && !esAdmin">
+        <div class="switcher">
+          <button
+            type="button"
+            class="mode-btn"
+            [class.active]="modoRegistro === 'telefono'"
+            (click)="cambiarModo('telefono')"
+          >
+            Telefono
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            [class.active]="modoRegistro === 'qr'"
+            (click)="cambiarModo('qr')"
+          >
+            Escanear QR
+          </button>
+        </div>
+
+        <div *ngIf="modoRegistro === 'telefono'" class="entry-panel">
+          <label for="telefono" class="label">Telefono</label>
+          <input
+            id="telefono"
+            type="tel"
+            inputmode="numeric"
+            maxlength="10"
+            placeholder="Ej: 0987654321"
+            [value]="telefono"
+            (input)="onTelefonoInput($event)"
+            class="phone-input"
+          />
+
+          <button
+            type="button"
+            class="primary-btn"
+            [disabled]="cargando"
+            (click)="registrarVisita()"
+          >
+            {{ cargando ? 'Registrando...' : 'Registrar Visita' }}
+          </button>
+        </div>
+
+        <div *ngIf="modoRegistro === 'qr'" class="entry-panel qr-panel">
+          <div id="qr-reader" class="qr-reader"></div>
+          <p class="qr-help">Apunta la camara al QR que el cliente muestra desde su cuenta.</p>
+          <p *ngIf="escanerError" class="feedback warning">{{ escanerError }}</p>
+        </div>
+
+        <p *ngIf="mensaje" class="feedback" [class.reward]="esRecompensa">
+          {{ mensaje }}
+        </p>
+
+        <section *ngIf="ultimoCliente" class="customer-preview">
+          <div>
+            <span class="mini-label">Cliente actual</span>
+            <h3>{{ ultimoCliente.telefono_mascarado }}</h3>
+            <p>
+              {{ ultimoCliente.visitas_actuales }}/{{ ultimoCliente.objetivo_visitas }} visitas activas
+              · {{ ultimoCliente.recompensas_total }} recompensas historicas
+            </p>
+          </div>
+
+          <a [routerLink]="['/comercio', ultimoCliente.comercio.slug, 'cliente', ultimoCliente.public_id]" class="secondary-btn">
+            Ver cuenta del cliente
+          </a>
+        </section>
+      </ng-container>
+    </div>
+  </section>
+</main>

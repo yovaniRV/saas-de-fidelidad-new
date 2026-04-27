@@ -1,0 +1,64 @@
+<main class="customer-shell">
+  <section class="customer-card" *ngIf="cargando">
+    <div class="customer-body">
+      <p>Cargando cuenta...</p>
+    </div>
+  </section>
+
+  <section class="customer-card" *ngIf="!cargando && error">
+    <div class="customer-body">
+      <p>{{ error }}</p>
+      <a routerLink="/mi-cuenta" class="back-link">Volver a mi perfil</a>
+    </div>
+  </section>
+
+  <section
+    class="customer-card"
+    *ngIf="!cargando && cuenta"
+    [style.--brand-primary]="cuenta.comercio.color_primario"
+    [style.--brand-secondary]="cuenta.comercio.color_secundario"
+  >
+    <div class="customer-hero">
+      <span class="eyebrow">{{ cuenta.comercio.nombre }}</span>
+      <img *ngIf="mostrarLogo" [src]="cuenta.comercio.logo_url" alt="Logo del comercio" class="brand-logo" loading="lazy" (error)="marcarLogoFallido()" />
+      <div *ngIf="!mostrarLogo" class="brand-fallback" aria-hidden="true">{{ inicialesComercio }}</div>
+      <h1>Tu tarjeta de fidelidad</h1>
+      <p>
+        Gana una {{ cuenta.comercio.recompensa_nombre }} al llegar a {{ cuenta.objetivo_visitas }} visitas.
+        Telefono: {{ cuenta.telefono_mascarado }}
+      </p>
+    </div>
+
+    <div class="customer-body">
+      <div class="progress-block">
+        <div class="progress-meta">
+          <strong>{{ cuenta.visitas_actuales }}/{{ cuenta.objetivo_visitas }}</strong>
+          <span>visitas acumuladas</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="progreso"></div>
+        </div>
+      </div>
+
+      <div class="reward-total">
+        <span>Recompensas ganadas</span>
+        <strong>{{ cuenta.recompensas_total }} 🎁</strong>
+      </div>
+
+      <div class="qr-panel">
+        <img [src]="qrDataUrl" alt="Codigo QR del cliente" class="qr-image" />
+        <p>Muestra este QR en caja para registrar tu visita</p>
+      </div>
+
+      <div class="wallet-grid wallet-grid--actions">
+        <button type="button" class="wallet-card wallet-card--alt" (click)="descargarQr()">Descargar QR</button>
+        <button type="button" class="wallet-card wallet-card--alt" (click)="compartirQr()">Compartir QR</button>
+      </div>
+
+      <p *ngIf="mensajeQr" class="wallet-note wallet-note--ok">{{ mensajeQr }}</p>
+
+      <a routerLink="/mi-cuenta" class="back-link">← Volver a mis comercios</a>
+    </div>
+  </section>
+</main>
+
