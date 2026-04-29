@@ -10,7 +10,12 @@ from security_utils import hash_password, is_password_hashed, verify_password
 # Variable de entorno DATABASE_URL para producción.
 # Por defecto usa PostgreSQL local con usuario postgres.
 DEFAULT_DB_URL = "postgresql://postgres:VrV180320@localhost:5432/saas_fidelidad"
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL") or DEFAULT_DB_URL
+
+# Debug: Log the database URL being used (first 50 chars for security)
+if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
+    db_log = SQLALCHEMY_DATABASE_URL[:50] + "..." if len(SQLALCHEMY_DATABASE_URL) > 50 else SQLALCHEMY_DATABASE_URL
+    print(f"[DB] Connecting to: {db_log}")
 DEFAULT_COMERCIO_SLUG = "demo-cafe"
 DEFAULT_COMERCIO_NOMBRE = "Demo Cafe"
 DEFAULT_CAJERO_USERNAME = os.getenv("CASHIER_USERNAME", "cajero")
